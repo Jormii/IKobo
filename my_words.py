@@ -1,17 +1,20 @@
 from __future__ import annotations
 import pprint
-from typing import Dict, List, Tuple, Callable
+from typing import Dict, List
 
 import anki
 from kobo import CONNECTION
 from anki import Note
-from anki_notes import INote
+from anki_notes import Deck, INote
+from web import Selenium
+
 
 # NOTE: Configure these
 # --------------------------------------------------------------------------------
-MakeNoteCbT = Callable[[str], INote]
+from anki_notes import RAENote
 
-DICT_SUFFIX_TO_NOTE: Dict[str, Tuple[str, MakeNoteCbT]] = {
+DICT_SUFFIX_DECK: Dict[str, Deck] = {
+    '-es': Deck('RAE', RAENote),
 }
 
 # --------------------------------------------------------------------------------
@@ -50,13 +53,14 @@ class WordListTable:
 
 if __name__ == '__main__':
     exit_code = 0
+    selenium = Selenium()
 
-    decks = anki.get_decks()
-    for (deck, _) in DICT_SUFFIX_TO_NOTE.values():
-        if deck not in decks:
+    anki_decks = anki.get_decks()
+    for deck in DICT_SUFFIX_DECK.values():
+        if deck.name not in anki_decks:
             exit_code = 1
             print(f'Deck {deck} not present in Anki')
-            pprint.pp(f'Anki decks: {decks}')
+            pprint.pp(f'Anki decks: {anki_decks}')
 
     if exit_code != 0:
         exit(exit_code)
@@ -70,17 +74,19 @@ if __name__ == '__main__':
 
     notes: Dict[str, List[Note]] = {}
     for dict_suffix in word_rows_by_dict.keys():
-        if dict_suffix not in DICT_SUFFIX_TO_NOTE:
-            pprint.pp(f'{dict_suffix} not present in {DICT_SUFFIX_TO_NOTE}')
+        if dict_suffix not in DICT_SUFFIX_DECK:
+            pprint.pp(f'{dict_suffix} not present in {DICT_SUFFIX_DECK}')
             continue
 
-        deck, make_note_cb = DICT_SUFFIX_TO_NOTE[dict_suffix]
+        deck = DICT_SUFFIX_DECK[dict_suffix]
 
-        notes[deck] = []
+        notes[deck.name] = []
         for word_row in word_rows_by_dict[dict_suffix]:
-            note = make_note_cb(word_row.text)
+            args = INote.CreateParams(word_row.text, selenium)
+            inotes = deck.inote_cls.create(args)
 
-            fields = note.format()
-            notes[deck].append(Note(note.type, fields))
+            for inote in inotes:
+                fields = inote.format()
+                notes[deck.name].append(Note(inote.type, fields))
 
     exit(exit_code)
