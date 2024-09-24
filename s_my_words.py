@@ -4,14 +4,14 @@ from typing import Dict, List
 
 import anki
 from anki import Note
-from anki_notes import Deck, INote
+from c_anki_notes import Deck, INote
 from kobo import WordListTable
 from web import Selenium
 
 
 # NOTE: Configure these
 # --------------------------------------------------------------------------------
-from anki_notes import RAENote
+from c_anki_notes import RAENote
 
 DICT_SUFFIX_DECK: Dict[str, Deck] = {
     '-es': Deck('RAE', RAENote),
@@ -22,7 +22,8 @@ DICT_SUFFIX_DECK: Dict[str, Deck] = {
 
 KOBO_TEXT_FIELD = 'kobo_text'
 
-if __name__ == '__main__':
+
+def main() -> int:
     exit_code = 0
     selenium = Selenium()
 
@@ -34,7 +35,7 @@ if __name__ == '__main__':
             pprint.pp(f'Anki decks: {anki_decks}')
 
     if exit_code != 0:
-        exit(exit_code)
+        return exit_code
 
     word_rows = WordListTable.select_all()
     word_rows_by_dict: Dict[str, List[WordListTable]] = {}
@@ -76,3 +77,9 @@ if __name__ == '__main__':
             else:
                 note_id = note_ids[0]
                 anki.update_note(note, note_id)
+
+    return exit_code
+
+
+if __name__ == '__main__':
+    exit(main())

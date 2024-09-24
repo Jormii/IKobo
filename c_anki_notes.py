@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List, Sequence, Type
+from typing import Dict, List, Type
 
 from web import Element, Selenium
 

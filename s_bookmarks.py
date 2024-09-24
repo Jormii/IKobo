@@ -2,11 +2,12 @@ import os
 from typing import Dict, List
 
 from kobo import KEPUB, BookmarkTable
-from c_bookmarks import BasicBookmarks
 
 
 # NOTE: Configure these
 # --------------------------------------------------------------------------------
+from c_bookmarks import BasicBookmarks
+
 OUTPUT_DIR = './bookmarks'
 
 ENCODING = 'utf-8'
