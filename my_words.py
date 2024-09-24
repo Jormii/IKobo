@@ -3,9 +3,9 @@ import pprint
 from typing import Dict, List
 
 import anki
-from kobo import CONNECTION
 from anki import Note
 from anki_notes import Deck, INote
+from kobo import WordListTable
 from web import Selenium
 
 
@@ -20,36 +20,7 @@ DICT_SUFFIX_DECK: Dict[str, Deck] = {
 # --------------------------------------------------------------------------------
 
 
-class WordListTable:
-
-    TABLE = 'WordList'
-
-    TEXT_COL = 'Text'
-    VOLUME_ID_COL = 'VolumeId'
-    DICT_SUFFIX_COL = 'DictSuffix'
-    DATE_CREATED_COL = 'DateCreated'
-
-    def __init__(self, text: str, volume_id: str, dict_suffix: str, date_created: str) -> None:
-        self.text = text
-        self.volume_id = volume_id
-        self.dict_suffix = dict_suffix
-        self.date_created = date_created
-
-    @staticmethod
-    def select_all() -> List[WordListTable]:
-        cursor = CONNECTION.execute(f'SELECT * FROM {WordListTable.TABLE}')
-
-        rows: List[WordListTable] = []
-        for row in cursor.fetchall():
-            rows.append(WordListTable(
-                row[WordListTable.TEXT_COL],
-                row[WordListTable.VOLUME_ID_COL],
-                row[WordListTable.DICT_SUFFIX_COL],
-                row[WordListTable.DATE_CREATED_COL],
-            ))
-
-        return rows
-
+KOBO_TEXT_FIELD = 'kobo_text'
 
 if __name__ == '__main__':
     exit_code = 0
@@ -83,10 +54,25 @@ if __name__ == '__main__':
         notes[deck.name] = []
         for word_row in word_rows_by_dict[dict_suffix]:
             args = INote.CreateParams(word_row.text, selenium)
-            inotes = deck.inote_cls.create(args)
+            inote = deck.inote_cls.create(args)
+            if inote is None:
+                continue
 
-            for inote in inotes:
-                fields = inote.format()
-                notes[deck.name].append(Note(inote.type, fields))
+            fields = inote.format()
+            fields[KOBO_TEXT_FIELD] = args.text
 
-    exit(exit_code)
+            notes[deck.name].append(Note(inote.type, fields))
+
+    for deck_name in notes.keys():
+        for note in notes[deck_name]:
+            text = note.fields[KOBO_TEXT_FIELD]
+            query = f'"{KOBO_TEXT_FIELD}:{text}"'
+            note_ids = anki.find_notes(deck_name, query)
+
+            assert len(note_ids) <= 1
+
+            if len(note_ids) == 0:
+                anki.add_note(note, deck_name)
+            else:
+                note_id = note_ids[0]
+                anki.update_note(note, note_id)

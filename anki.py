@@ -23,7 +23,7 @@ def get_decks() -> List[str]:
     return request('deckNames', {})  # type: ignore[no-any-return]
 
 
-def add_note(deck: str, note: Note) -> int:
+def add_note(note: Note, deck: str) -> int:
     params = {
         'note': {
             'deckName': deck,
@@ -33,6 +33,25 @@ def add_note(deck: str, note: Note) -> int:
     }
 
     return request('addNote', params)  # type: ignore[no-any-return]
+
+
+def update_note(note: Note, note_id: int) -> int:
+    params = {
+        'note': {
+            'id': note_id,
+            'fields': note.fields,
+        },
+    }
+
+    return request('updateNoteFields', params)  # type: ignore[no-any-return]
+
+
+def find_notes(deck: str, query: str) -> List[int]:
+    params = {
+        'query': f'"deck:{deck}" {query}'
+    }
+
+    return request('findNotes', params)  # type: ignore[no-any-return]
 
 
 def request(action: str, params: Dict[str, Any], version: int = ANKI_CONNECT_VERSION, http_address: str = ANKI_CONNECT_HTTP_ADDRESS) -> Any:

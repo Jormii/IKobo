@@ -26,7 +26,7 @@ class INote:
         raise NotImplementedError(type(self))
 
     @classmethod
-    def create(cls, args: CreateParams) -> Sequence[INote]:
+    def create(cls, args: CreateParams) -> INote | None:
         raise NotImplementedError(cls)
 
 
@@ -88,6 +88,24 @@ class RAENote(INote):
             self.supplementary_info = supplementary_info
             self.entries = entries
 
+        def format(self) -> str:
+            entries_html = '<ol>'
+            for entry in self.entries:
+                syno_and_anto_html = ''
+                if len(entry.synonyms) != 0 or len(entry.antonyms) != 0:
+                    if len(entry.synonyms) != 0:
+                        syno_and_anto_html += f'<li>Sin.: {", ".join(entry.synonyms)}</li>'
+
+                    if len(entry.synonyms) != 0:
+                        syno_and_anto_html += f'<li>Ant.: {", ".join(entry.antonyms)}</li>'
+
+                    syno_and_anto_html = f'<ul>{syno_and_anto_html}</ul>'
+
+                entries_html += f'<li>{entry.definition}{syno_and_anto_html}</li>'
+            entries_html += '</ol>'
+
+            return entries_html
+
         @staticmethod
         def create(article: Element) -> RAENote.Article:
             supplementary_info = ''
@@ -117,48 +135,40 @@ class RAENote(INote):
 
             return RAENote.Article(header.text, supplementary_info, entries)
 
-    def __init__(self, url: str, article: Article) -> None:
+    def __init__(self, url: str, articles: List[Article]) -> None:
         super().__init__('RAE')
 
         self.url = url
-        self.article = article
+        self.articles = articles
 
     def format(self) -> Dict[str, str]:
-        article_html = f'<a href="{self.url}">{self.article.headword}</a>'
+        main_article = self.articles[0]
+        headword_html = f'<a href="{self.url}">{main_article.headword}</a>'
 
-        entries_html = '<ol>'
-        for entry in self.article.entries:
-            syno_and_anto_html = ''
-            if len(entry.synonyms) != 0 or len(entry.antonyms) != 0:
-                if len(entry.synonyms) != 0:
-                    syno_and_anto_html += f'<li>Sin.: {", ".join(entry.synonyms)}</li>'
-
-                if len(entry.synonyms) != 0:
-                    syno_and_anto_html += f'<li>Ant.: {", ".join(entry.antonyms)}</li>'
-
-                syno_and_anto_html = f'<ul>{syno_and_anto_html}</ul>'
-
-            entries_html += f'<li>{entry.definition}{syno_and_anto_html}</li>'
-        entries_html += '</ol>'
+        articles_htmls = (f'<div>{a.format()}</div>' for a in self.articles)
+        articles_html = '<br>'.join(articles_htmls)
 
         return {
-            'lema': article_html,
-            'informacion_complementaria': self.article.supplementary_info,
-            'acepciones_simples': entries_html,
+            'lema': headword_html,
+            'informacion_complementaria': main_article.supplementary_info,
+            'acepciones_simples': articles_html,
         }
 
     @classmethod
-    def create(cls, args: INote.CreateParams) -> Sequence[INote]:
+    def create(cls, args: INote.CreateParams) -> INote | None:
         # NOTE: https://dle.rae.es/contenido/ayuda#IG2
 
         url = f'https://dle.rae.es/{args.text}'
         html = Element.parse_html(args.selenium.get(url))
 
         articles = html.find_all('article')
+        if len(articles) == 0:
+            return None
 
-        notes: List[RAENote] = []
+        rae_articles: List[RAENote.Article] = []
         for article in articles:
             rae_article = RAENote.Article.create(article)
-            notes.append(RAENote(url, rae_article))
+            rae_articles.append(rae_article)
 
-        return notes
+        note = RAENote(url, rae_articles)
+        return note
