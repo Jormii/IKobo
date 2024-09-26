@@ -18,18 +18,29 @@ class Element:
         self.text = self.tag.text.strip()
 
     def cls(self) -> str:
-        cls = self.cls_or_none()
-        assert cls is not None
-
-        return cls
+        return self.get_attr('class')
 
     def cls_or_none(self) -> str | None:
-        classes = self.tag.get('class')
-        if classes is None:
+        return self.get_attr_or_none('class')
+
+    def get_attr(self, key: str) -> str:
+        attribute = self.get_attr_or_none(key)
+        assert attribute is not None
+
+        return attribute
+
+    def get_attr_or_none(self, key: str) -> str | None:
+        attributes = self.tag.get(key)
+        if attributes is None:
             return None
 
-        assert isinstance(classes, List) and len(classes) == 1
-        return classes[0]
+        if isinstance(attributes, str):
+            attribute = attributes
+        else:
+            assert len(attributes) == 1
+            attribute = attributes[0]
+
+        return attribute
 
     def xpath(self) -> str:
         tag = self.tag

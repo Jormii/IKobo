@@ -7,6 +7,7 @@ from typing import Dict, List
 from enum import IntEnum, auto
 from datetime import datetime, timezone
 
+from web import Element
 
 # NOTE: Configure these
 # --------------------------------------------------------------------------------
@@ -27,6 +28,37 @@ class KEPUB:
             self.zip_bytes[zip_name] = self.zip_file.read(zip_name)
 
         return self.zip_bytes[zip_name]
+
+    def table_of_contents(self) -> Dict[str, str]:
+        content = self.read('content.opf').decode()
+        parsed_content = Element.parse_html(content)
+
+        manifest_items: Dict[str, str] = {}
+        manifest = parsed_content.find('manifest')
+        for item in manifest.find_all('item'):
+            id = item.get_attr('id')
+            href = item.get_attr('href')
+
+            manifest_items[id] = href
+
+        spine_items: Dict[str, str] = {}
+        spine = parsed_content.find('spine')
+        for item in spine.find_all('itemref'):
+            id = item.get_attr('idref')
+            if id in manifest_items:
+                href = manifest_items[id]
+                spine_items[href] = id
+
+        return spine_items
+
+    @staticmethod
+    def is_kepub(volume_id: str) -> bool:
+        KEPUB_REGEX = r'\.kepub\.epub$'
+
+        file = volume_id_file(volume_id)
+        search = re.search(KEPUB_REGEX, file)
+
+        return search is not None
 
     @staticmethod
     def open(volume_id: str) -> KEPUB:
@@ -101,17 +133,21 @@ class BookmarkTable:
             self,
             volume_id: str,
             content_id: str,
+            start_container_path: str,
             text: str,
             annotation: str,
             date_created: datetime,
+            chapter_progress: float,
             date_modified: datetime,
             bookmark_type: BookmarkType
     ) -> None:
         self.volume_id = volume_id
         self.content_id = content_id
+        self.start_container_path = start_container_path
         self.text = text
         self.annotation = annotation
         self.date_created = date_created
+        self.chapter_progress = chapter_progress
         self.date_modified = date_modified
         self.bookmark_type = bookmark_type
 
@@ -133,9 +169,11 @@ class BookmarkTable:
             rows.append(BookmarkTable(
                 row[BookmarkTable.VOLUME_ID_COL],
                 row[BookmarkTable.CONTENT_ID_COL],
+                row[BookmarkTable.START_CONTAINER_PATH_COL],
                 text.strip(),
                 annotation.strip() if annotation is not None else '',
                 datetime.strptime(date_created, DATE_CREATED_FMT).replace(tzinfo=timezone.utc),  # nopep8
+                row[BookmarkTable.CHAPTER_PROGRESS_COL],
                 datetime.strptime(date_modified, DATE_MODIFIED_FMT).replace(tzinfo=timezone.utc),  # nopep8
                 BookmarkTable.TYPE_MAPPING[bookmark_type]
             ))

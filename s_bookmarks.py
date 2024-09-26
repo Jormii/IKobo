@@ -1,7 +1,8 @@
 import os
-from typing import Dict, List
+from typing import Dict, List, Set
 
-from kobo import KEPUB, BookmarkTable
+import kobo
+from kobo import KEPUB, ContentID, BookmarkTable
 
 
 # NOTE: Configure these
@@ -28,9 +29,26 @@ def main() -> int:
 
     bookmark_rows = BookmarkTable.select_all()
 
+    not_kepubs: Set[str] = set()
+    dont_exist: Set[str] = set()
     kepubs: Dict[str, KEPUBBookmarks] = {}
     for bookmark_row in bookmark_rows:
         volume_id = bookmark_row.volume_id
+
+        if not KEPUB.is_kepub(volume_id):
+            if volume_id not in not_kepubs:
+                print(f' ! Not a KEPUB: {volume_id}')
+
+            not_kepubs.add(volume_id)
+            continue
+
+        file = kobo.volume_id_file(volume_id)
+        if not os.path.isfile(file):
+            if volume_id not in dont_exist:
+                print(f' ! KEPUB does not exists: {volume_id}')
+
+            dont_exist.add(volume_id)
+            continue
 
         if volume_id not in kepubs:
             kepubs[volume_id] = KEPUBBookmarks(KEPUB.open(volume_id))
@@ -38,8 +56,14 @@ def main() -> int:
         kepubs[volume_id].bookmark_rows.append(bookmark_row)
 
     for volume_id, kepub in kepubs.items():
-        # TODO
-        # kepub.bookmark_rows.sort()
+        toc = kepub.kepub.table_of_contents()
+        toc_indices = {k: i for i, k in enumerate(toc.keys())}
+        kepub.bookmark_rows.sort(
+            key=lambda bkmrk: (
+                toc_indices[ContentID.parse(bkmrk.content_id).xhtml],
+                bkmrk.start_container_path  # TODO: Clarify
+            )
+        )
 
         file = kepub.kepub.file
         _, filename = os.path.split(file)
