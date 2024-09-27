@@ -24,11 +24,13 @@ class KEPUB:
                 title: str | None,
                 author: str | None,
                 publisher: str | None,
+                timestamp: datetime | None,
                 table_of_contents: List[str]
         ) -> None:
             self.title = title
             self.author = author
             self.publisher = publisher
+            self.timestamp = timestamp
             self.table_of_contents = table_of_contents
 
     def __init__(self, file: str, volume_id: str, encoding: str) -> None:
@@ -69,10 +71,15 @@ class KEPUB:
 
         title = KEPUB._metadata('dc:title', content_metadata)
         author = KEPUB._metadata('dc:creator', content_metadata)
+        timestamp_str = KEPUB._metadata('dc:date', content_metadata)
         publisher = KEPUB._metadata('dc:publisher', content_metadata)
         table_of_contents = KEPUB._table_of_contents(parsed_content)
 
-        metadata = KEPUB.Metadata(title, author, publisher, table_of_contents)
+        timestamp: datetime | None = None
+        if timestamp_str is not None:
+            timestamp = datetime.fromisoformat(timestamp_str)
+
+        metadata = KEPUB.Metadata(title, author, publisher, timestamp, table_of_contents)  # nopep8
         return kepub, metadata
 
     @staticmethod
