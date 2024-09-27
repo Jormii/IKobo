@@ -102,6 +102,15 @@ class Element:
 
         return elements[0]
 
+    def find_or_none(self, name: str, classes: Set[str] = set(), recursive: bool = True) -> Element | None:
+        elements = self.find_all(name, classes=classes, recursive=recursive)
+        assert len(elements) <= 1
+
+        if len(elements) == 0:
+            return None
+        else:
+            return elements[0]
+
     def find_all(self, name: str, classes: Set[str] = set(), recursive: bool = True) -> List[Element]:
         tags = self.tag.find_all(name, recursive=recursive)
 

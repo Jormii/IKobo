@@ -18,8 +18,9 @@ FORMATTER = BasicBookmarks()
 
 class KEPUBBookmarks:
 
-    def __init__(self, kepub: KEPUB) -> None:
+    def __init__(self, kepub: KEPUB, metadata: KEPUB.Metadata) -> None:
         self.kepub = kepub
+        self.metadata = metadata
         self.bookmark_rows: List[BookmarkTable] = []
 
 
@@ -51,13 +52,14 @@ def main() -> int:
             continue
 
         if volume_id not in kepubs:
-            kepubs[volume_id] = KEPUBBookmarks(KEPUB.open(volume_id, ENCODING))
+            _kepub, metadata = KEPUB.open(volume_id, ENCODING)
+            kepubs[volume_id] = KEPUBBookmarks(_kepub, metadata)
 
         kepubs[volume_id].bookmark_rows.append(bookmark_row)
 
     for volume_id, kepub in kepubs.items():
-        toc = kepub.kepub.table_of_contents()
-        toc_indices = {k: i for i, k in enumerate(toc.keys())}
+        toc = kepub.metadata.table_of_contents
+        toc_indices = {k: i for i, k in enumerate(toc)}
         kepub.bookmark_rows.sort(
             key=lambda bkmrk: (
                 toc_indices[ContentID.parse(bkmrk.content_id).xhtml],

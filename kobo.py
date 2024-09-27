@@ -17,6 +17,20 @@ VOLUME = r'E:'
 
 class KEPUB:
 
+    class Metadata:
+
+        def __init__(
+                self,
+                title: str | None,
+                author: str | None,
+                publisher: str | None,
+                table_of_contents: List[str]
+        ) -> None:
+            self.title = title
+            self.author = author
+            self.publisher = publisher
+            self.table_of_contents = table_of_contents
+
     def __init__(self, file: str, volume_id: str, encoding: str) -> None:
         self.file = file
         self.volume_id = volume_id
@@ -35,28 +49,6 @@ class KEPUB:
         bytes = self.read(zip_name)
         return bytes.decode(self.encoding)
 
-    def table_of_contents(self) -> Dict[str, str]:
-        content = self.read_str('content.opf')
-        parsed_content = Element.parse_html(content)
-
-        manifest_items: Dict[str, str] = {}
-        manifest = parsed_content.find('manifest')
-        for item in manifest.find_all('item'):
-            id = item.get_attr('id')
-            href = item.get_attr('href')
-
-            manifest_items[id] = href
-
-        spine_items: Dict[str, str] = {}
-        spine = parsed_content.find('spine')
-        for item in spine.find_all('itemref'):
-            id = item.get_attr('idref')
-            if id in manifest_items:
-                href = manifest_items[id]
-                spine_items[href] = id
-
-        return spine_items
-
     @staticmethod
     def is_kepub(volume_id: str) -> bool:
         KEPUB_REGEX = r'\.kepub\.epub$'
@@ -67,9 +59,49 @@ class KEPUB:
         return search is not None
 
     @staticmethod
-    def open(volume_id: str, encoding: str) -> KEPUB:
+    def open(volume_id: str, encoding: str) -> Tuple[KEPUB, Metadata]:
         file = volume_id_file(volume_id)
-        return KEPUB(file, volume_id, encoding)
+        kepub = KEPUB(file, volume_id, encoding)
+
+        content = kepub.read_str('content.opf')
+        parsed_content = Element.parse_html(content)
+        content_metadata = parsed_content.find('metadata')
+
+        title = KEPUB._metadata('dc:title', content_metadata)
+        author = KEPUB._metadata('dc:creator', content_metadata)
+        publisher = KEPUB._metadata('dc:publisher', content_metadata)
+        table_of_contents = KEPUB._table_of_contents(parsed_content)
+
+        metadata = KEPUB.Metadata(title, author, publisher, table_of_contents)
+        return kepub, metadata
+
+    @staticmethod
+    def _metadata(name: str, metadata: Element) -> str | None:
+        dc = metadata.find_or_none(name)
+        if dc is None:
+            return None
+        else:
+            return dc.text
+
+    @staticmethod
+    def _table_of_contents(content: Element) -> List[str]:
+        manifest_dict: Dict[str, str] = {}
+        manifest = content.find('manifest')
+        for item in manifest.find_all('item'):
+            id = item.get_attr('id')
+            href = item.get_attr('href')
+
+            manifest_dict[id] = href
+
+        spine = content.find('spine')
+        table_of_contents: List[str] = []
+        for item in spine.find_all('itemref'):
+            id = item.get_attr('idref')
+            if id in manifest_dict:
+                href = manifest_dict[id]
+                table_of_contents.append(href)
+
+        return table_of_contents
 
 
 class ContentID:
