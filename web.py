@@ -2,7 +2,7 @@ from __future__ import annotations
 import time
 from typing import List, Set
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, PageElement, Tag
 from selenium import webdriver  # type: ignore
 from selenium.webdriver.common.by import By  # type: ignore
 from selenium.webdriver.remote.webelement import WebElement  # type: ignore
@@ -79,22 +79,38 @@ class Element:
 
         return children
 
+    def prev_siblings(self) -> List[Element]:
+        siblings = self._siblings(previous_or_next=True)
+        return siblings
+
     def next_siblings(self) -> List[Element]:
+        siblings = self._siblings(previous_or_next=False)
+        return siblings
+
+    def _siblings(self, previous_or_next: bool) -> List[Element]:
+
+        def _next(_tag: PageElement) -> PageElement | None:
+            if previous_or_next:
+                return _tag.previousSibling
+            else:
+                return _tag.nextSibling
+
         assert (parent := self.tag.parent) is not None
 
-        next: List[Element] = []
-        element = self.tag.nextSibling
+        element = _next(self.tag)
+        siblings: List[Element] = []
         while element is not None:
             assert (e_parent := element.parent) is not None
             if e_parent != parent:
                 break
 
             if isinstance(element, Tag):
-                next.append(Element(element, self.parsed_html))
+                siblings.append(Element(element, self.parsed_html))
 
-            element = element.nextSibling
+            element = _next(element)
 
-        return next
+        return siblings
+        pass
 
     def find(self, name: str, classes: Set[str] = set(), recursive: bool = True) -> Element:
         elements = self.find_all(name, classes=classes, recursive=recursive)

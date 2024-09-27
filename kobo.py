@@ -130,12 +130,14 @@ class BookmarkContext:
 
     def __init__(
             self,
+            chapter: Element,
             containers: List[Element],
             bookmark_start: Element,
             bookmark_start_offset: int,
             bookmark_end: Element,
             bookmark_end_offset: int,
     ) -> None:
+        self.chapter = chapter
         self.containers = containers
         self.bookmark_start = bookmark_start
         self.bookmark_start_offset = bookmark_start_offset
@@ -148,6 +150,8 @@ class BookmarkContext:
 
     @staticmethod
     def extract(bookmark: BookmarkTable, kepub: KEPUB) -> BookmarkContext:
+        CHAPTER_TAGS = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+
         content = ContentID.parse(bookmark.content_id)
         assert bookmark.volume_id == kepub.volume_id and content.file == kepub.file
 
@@ -170,7 +174,22 @@ class BookmarkContext:
             else:
                 del containers[i]
 
+        top_container = containers[0]
+        siblings = top_container.prev_siblings()
+        siblings.insert(0, top_container)
+
+        chapter: Element | None = None
+        for i in range(len(siblings)):
+            sibling = siblings[i]
+
+            if sibling.name in CHAPTER_TAGS:
+                chapter = sibling
+                break
+
+        assert chapter is not None
+
         return BookmarkContext(
+            chapter,
             containers,
             bookmark_start, bookmark.start_offset,
             bookmark_end, bookmark.end_offset,
