@@ -51,7 +51,7 @@ def main() -> int:
             continue
 
         if volume_id not in kepubs:
-            kepubs[volume_id] = KEPUBBookmarks(KEPUB.open(volume_id))
+            kepubs[volume_id] = KEPUBBookmarks(KEPUB.open(volume_id, ENCODING))
 
         kepubs[volume_id].bookmark_rows.append(bookmark_row)
 

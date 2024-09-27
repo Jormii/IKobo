@@ -3,8 +3,8 @@ import os
 import re
 import sqlite3
 from zipfile import ZipFile
-from typing import Dict, List
 from enum import IntEnum, auto
+from typing import Dict, List, Tuple
 from datetime import datetime, timezone
 
 from web import Element
@@ -17,20 +17,26 @@ VOLUME = r'E:'
 
 class KEPUB:
 
-    def __init__(self, file: str, zip_file: ZipFile) -> None:
+    def __init__(self, file: str, volume_id: str, encoding: str) -> None:
         self.file = file
-        self.zip_file = zip_file
+        self.volume_id = volume_id
+        self.encoding = encoding
 
-        self.zip_bytes: Dict[str, bytes] = {}
+        self.zip_file = ZipFile(self.file)
+        self.zip_cache: Dict[str, bytes] = {}
 
     def read(self, zip_name: str) -> bytes:
-        if zip_name not in self.zip_bytes:
-            self.zip_bytes[zip_name] = self.zip_file.read(zip_name)
+        if zip_name not in self.zip_cache:
+            self.zip_cache[zip_name] = self.zip_file.read(zip_name)
 
-        return self.zip_bytes[zip_name]
+        return self.zip_cache[zip_name]
+
+    def read_str(self, zip_name: str) -> str:
+        bytes = self.read(zip_name)
+        return bytes.decode(self.encoding)
 
     def table_of_contents(self) -> Dict[str, str]:
-        content = self.read('content.opf').decode()
+        content = self.read_str('content.opf')
         parsed_content = Element.parse_html(content)
 
         manifest_items: Dict[str, str] = {}
@@ -61,11 +67,9 @@ class KEPUB:
         return search is not None
 
     @staticmethod
-    def open(volume_id: str) -> KEPUB:
+    def open(volume_id: str, encoding: str) -> KEPUB:
         file = volume_id_file(volume_id)
-        zip_file = ZipFile(file)
-
-        return KEPUB(file, zip_file)
+        return KEPUB(file, volume_id, encoding)
 
 
 class ContentID:
@@ -88,6 +92,90 @@ class ContentID:
 
         file = _format_path(rel_file)
         return ContentID(file, xhtml, element)
+
+
+class BookmarkContext:
+
+    def __init__(
+            self,
+            containers: List[Element],
+            bookmark_start: Element,
+            bookmark_start_offset: int,
+            bookmark_end: Element,
+            bookmark_end_offset: int,
+    ) -> None:
+        self.containers = containers
+        self.bookmark_start = bookmark_start
+        self.bookmark_start_offset = bookmark_start_offset
+        self.bookmark_end = bookmark_end
+        self.bookmark_end_offset = bookmark_end_offset
+
+        # NOTE: Provisional
+        assert self.bookmark_start.name == 'span'
+        assert self.bookmark_end.name == 'span'
+
+    @staticmethod
+    def extract(bookmark: BookmarkTable, kepub: KEPUB) -> BookmarkContext:
+        content = ContentID.parse(bookmark.content_id)
+        assert bookmark.volume_id == kepub.volume_id and content.file == kepub.file
+
+        xhtml = kepub.read_str(content.xhtml)
+        parsed_xhtml = Element.parse_html(xhtml)
+        inner_div = parsed_xhtml.find_with_id('div', 'book-inner')
+
+        bookmark_start, start_parent = BookmarkContext._extract(
+            bookmark.start_container_path, inner_div, grab_first_or_last=True)
+        bookmark_end, end_parent = BookmarkContext._extract(
+            bookmark.end_container_path, inner_div, grab_first_or_last=False)
+
+        containers = inner_div.children()
+        while containers[0] != start_parent:
+            del containers[0]
+
+        for i in reversed(range(1, len(containers))):
+            if containers[i] == end_parent:
+                break
+            else:
+                del containers[i]
+
+        return BookmarkContext(
+            containers,
+            bookmark_start, bookmark.start_offset,
+            bookmark_end, bookmark.end_offset,
+        )
+
+    @staticmethod
+    def _extract(
+            container_path: str,
+            inner_div: Element,
+            grab_first_or_last: bool
+    ) -> Tuple[Element, Element]:
+        CONTAINER_PATH_REGEX = r'^(.*)#(.*)$'
+
+        search = re.search(CONTAINER_PATH_REGEX, container_path)
+        assert search is not None
+
+        tag, id = search.groups()
+        id = id.replace('\.', '.')  # NOTE: '.' are escaped as '\.'
+
+        # NOTE: Apparently there is an odd behavior when highlights are near images
+        #   Scenarios found so far:
+        #       - Highlight is an image
+        #       - Image and span share id
+
+        elements = inner_div.find_all_with_id(tag, id)
+        assert len(elements) != 0
+
+        if grab_first_or_last:
+            element = elements[0]
+        else:
+            element = elements[-1]
+
+        container = element.parent()
+        while (parent := container.parent()) != inner_div:
+            container = parent
+
+        return element, container
 
 
 class BookmarkTable:
@@ -134,6 +222,9 @@ class BookmarkTable:
             volume_id: str,
             content_id: str,
             start_container_path: str,
+            start_offset: int,
+            end_container_path: str,
+            end_offset: int,
             text: str,
             annotation: str,
             date_created: datetime,
@@ -144,6 +235,9 @@ class BookmarkTable:
         self.volume_id = volume_id
         self.content_id = content_id
         self.start_container_path = start_container_path
+        self.start_offset = start_offset
+        self.end_container_path = end_container_path
+        self.end_offset = end_offset
         self.text = text
         self.annotation = annotation
         self.date_created = date_created
@@ -170,6 +264,9 @@ class BookmarkTable:
                 row[BookmarkTable.VOLUME_ID_COL],
                 row[BookmarkTable.CONTENT_ID_COL],
                 row[BookmarkTable.START_CONTAINER_PATH_COL],
+                row[BookmarkTable.START_OFFSET_COL],
+                row[BookmarkTable.END_CONTAINER_PATH_COL],
+                row[BookmarkTable.END_OF_OFFSET_COL],
                 text.strip(),
                 annotation.strip() if annotation is not None else '',
                 datetime.strptime(date_created, DATE_CREATED_FMT).replace(tzinfo=timezone.utc),  # nopep8

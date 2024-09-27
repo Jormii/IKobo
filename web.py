@@ -65,6 +65,12 @@ class Element:
         xpath = '/'.join(reversed(paths))
         return f'/{xpath}'
 
+    def parent(self) -> Element:
+        tag = self.tag.parent
+        assert tag is not None
+
+        return Element(tag, self.parsed_html)
+
     def children(self) -> List[Element]:
         children: List[Element] = []
         for element in self.tag.children:
@@ -91,12 +97,12 @@ class Element:
         return next
 
     def find(self, name: str, classes: Set[str] = set(), recursive: bool = True) -> Element:
-        tags = self.find_all(name, classes=classes, recursive=recursive)
-        assert len(tags) == 1
+        elements = self.find_all(name, classes=classes, recursive=recursive)
+        assert len(elements) == 1
 
-        return tags[0]
+        return elements[0]
 
-    def find_all(self, name: str, classes: Set[str] = set(), recursive: bool = True) -> List[Element]:  # noqa: E501
+    def find_all(self, name: str, classes: Set[str] = set(), recursive: bool = True) -> List[Element]:
         tags = self.tag.find_all(name, recursive=recursive)
 
         for i in reversed(range(len(tags))):
@@ -114,6 +120,34 @@ class Element:
             elements.append(Element(tag, self.parsed_html))
 
         return elements
+
+    def find_with_id(self, name: str, id: str) -> Element:
+        elements = self.find_all_with_id(name, id)
+        assert len(elements) == 1
+
+        return elements[0]
+
+    def find_with_id_or_none(self, name: str, id: str) -> Element | None:
+        elements = self.find_all_with_id(name, id)
+        assert len(elements) <= 1
+
+        if len(elements) == 0:
+            return None
+        else:
+            return elements[0]
+
+    def find_all_with_id(self, name: str, id: str) -> List[Element]:
+        tags = self.tag.find_all(name, {'id': id})
+        elements = [Element(tag, self.parsed_html) for tag in tags]
+
+        return elements
+
+    def __hash__(self) -> int:
+        return hash(self.tag)
+
+    def __eq__(self, __value: object) -> bool:
+        assert isinstance(__value, Element)
+        return self.tag == __value.tag
 
     def __repr__(self) -> str:
         return repr(self.tag)
