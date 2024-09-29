@@ -66,14 +66,12 @@ class MarkdownFormatter(IFormatter):
             created_str: str,
             modified_str: str,
             annotation_str: str,
-            empty_table_cell_str: str
     ) -> None:
         self.indent = indent
         self.timestamp_fmt = timestamp_fmt
         self.created_str = created_str
         self.modified_str = modified_str
         self.annotation_str = annotation_str
-        self.empty_table_cell_str = empty_table_cell_str
 
         self.local_tz = datetime.now().astimezone().tzinfo
 
@@ -269,7 +267,6 @@ class MarkdownFormatter(IFormatter):
     def _format_table(self, element: Element, formatting: Formatting) -> str:
         headers: List[str] = []
         rows: List[List[str]] = []
-        empty_cell_str = formatting.formatter.empty_table_cell_str
 
         body = element.find('tbody')
         trs = body.find_all('tr', recursive=False)
@@ -295,9 +292,6 @@ class MarkdownFormatter(IFormatter):
                         raise NotImplementedError(content.name)
 
                 cell_md = child_md.strip()
-                if len(cell_md) == 0:
-                    cell_md = empty_cell_str
-
                 dst_row.append(cell_md)
 
         width = max(
@@ -307,7 +301,7 @@ class MarkdownFormatter(IFormatter):
 
         def fill(_row: List[str]) -> None:
             _n = width - len(_row)
-            _row.extend(_n * [empty_cell_str])
+            _row.extend(_n * [''])
 
         fill(headers)
         for row in rows:
@@ -317,11 +311,11 @@ class MarkdownFormatter(IFormatter):
 
         # NOTE: The extra pipe makes single-column tables format correctly
         #   and doesn't affect regular tables
-        markdown += ' | '.join(headers) + ' | \n'
-        markdown += '|'.join(width * ['---']) + '\n'
+        markdown += '| ' + ' | '.join(headers) + ' |\n'
+        markdown += '|' + '|'.join(width * ['---']) + '\n'
 
         for row in rows:
-            markdown += ' | '.join(row) + '\n'
+            markdown += '| ' + ' | '.join(row) + '\n'
 
         return markdown
 

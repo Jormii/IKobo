@@ -17,7 +17,6 @@ TIMESTAMP_FMT = '%Y-%m-%d'
 CREATED_STR = 'Creado'
 MODIFIED_STR = 'Modificado'
 ANNOTATION_STR = 'Anotación'
-EMPTY_TABLE_CELL_STR = '(...)'
 
 FORMATTER = MarkdownFormatter(
     INDENT,
@@ -25,7 +24,6 @@ FORMATTER = MarkdownFormatter(
     CREATED_STR,
     MODIFIED_STR,
     ANNOTATION_STR,
-    EMPTY_TABLE_CELL_STR
 )
 # --------------------------------------------------------------------------------
 
