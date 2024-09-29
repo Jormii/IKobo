@@ -171,7 +171,9 @@ class Element:
         return hash(self.tag)
 
     def __eq__(self, __value: object) -> bool:
-        assert isinstance(__value, Element)
+        if not isinstance(__value, Element):
+            return False
+        
         return self.tag == __value.tag
 
     def __repr__(self) -> str:

@@ -137,19 +137,26 @@ class BookmarkContext:
 
     def __init__(
             self,
-            chapter: Element,
+            chapters: Dict[int, Element],
             containers: List[Element],
+            content_id: ContentID,
             bookmark_start: Element,
             bookmark_start_offset: int,
             bookmark_end: Element,
             bookmark_end_offset: int,
     ) -> None:
-        self.chapter = chapter
+        self.chapters = chapters
         self.containers = containers
+        self.content_id = content_id
         self.bookmark_start = bookmark_start
         self.bookmark_start_offset = bookmark_start_offset
         self.bookmark_end = bookmark_end
         self.bookmark_end_offset = bookmark_end_offset
+
+        self.bookmark_chapter: Element | None = None
+        if len(self.chapters) != 0:
+            max_key = max(self.chapters.keys())
+            self.bookmark_chapter = self.chapters[max_key]
 
         # NOTE: Provisional
         assert self.bookmark_start.name == 'span'
@@ -185,21 +192,23 @@ class BookmarkContext:
         siblings = top_container.prev_siblings()
         siblings.insert(0, top_container)
 
-        chapter: Element | None = None
+        chapters: Dict[int, Element] = {}
         for i in range(len(siblings)):
             sibling = siblings[i]
 
             if sibling.name in CHAPTER_TAGS:
-                chapter = sibling
-                break
-
-        assert chapter is not None
+                level = int(sibling.name[1])  # hX
+                if level not in chapters:
+                    chapters[level] = sibling
 
         return BookmarkContext(
-            chapter,
+            chapters,
             containers,
-            bookmark_start, bookmark.start_offset,
-            bookmark_end, bookmark.end_offset,
+            content,
+            bookmark_start,
+            bookmark.start_offset,
+            bookmark_end,
+            bookmark.end_offset,
         )
 
     @staticmethod

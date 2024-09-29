@@ -2,26 +2,48 @@ import os
 from typing import Dict, List, Set
 
 import kobo
-from kobo import KEPUB, ContentID, BookmarkTable
-
+from kobo import KEPUB, BookmarkContext, BookmarkTable
+from c_bookmarks import IFormatter
 
 # NOTE: Configure these
 # --------------------------------------------------------------------------------
-from c_bookmarks import BasicBookmarks
-
-OUTPUT_DIR = './bookmarks'
+from c_bookmarks import MarkdownFormatter
 
 ENCODING = 'utf-8'
-FORMATTER = BasicBookmarks()
+OUTPUT_DIR = './bookmarks'
+
+INDENT = 4
+TIMESTAMP_FMT = '%Y-%m-%d'
+CREATED_STR = 'Creado'
+MODIFIED_STR = 'Modificado'
+ANNOTATION_STR = 'Anotación'
+NO_CHAPTER_STR = '(...)'
+EMPTY_TABLE_CELL_STR = '(...)'
+
+FORMATTER = MarkdownFormatter(
+    INDENT,
+    TIMESTAMP_FMT,
+    CREATED_STR,
+    MODIFIED_STR,
+    ANNOTATION_STR,
+    NO_CHAPTER_STR,
+    EMPTY_TABLE_CELL_STR
+)
 # --------------------------------------------------------------------------------
 
 
 class KEPUBBookmarks:
 
+    class Pair:
+
+        def __init__(self, bookmark: BookmarkTable, context: BookmarkContext) -> None:
+            self.bookmark = bookmark
+            self.context = context
+
     def __init__(self, kepub: KEPUB, metadata: KEPUB.Metadata) -> None:
         self.kepub = kepub
         self.metadata = metadata
-        self.bookmark_rows: List[BookmarkTable] = []
+        self.bookmarks: List[KEPUBBookmarks.Pair] = []
 
 
 def main() -> int:
@@ -33,7 +55,9 @@ def main() -> int:
     not_kepubs: Set[str] = set()
     dont_exist: Set[str] = set()
     kepubs: Dict[str, KEPUBBookmarks] = {}
-    for bookmark_row in bookmark_rows:
+    for i, bookmark_row in enumerate(bookmark_rows):
+        print(f'{i + 1} / {len(bookmark_rows)}...\r', end='')
+
         volume_id = bookmark_row.volume_id
 
         if not KEPUB.is_kepub(volume_id):
@@ -55,47 +79,68 @@ def main() -> int:
             _kepub, metadata = KEPUB.open(volume_id, ENCODING)
             kepubs[volume_id] = KEPUBBookmarks(_kepub, metadata)
 
-        kepubs[volume_id].bookmark_rows.append(bookmark_row)
+        kepub = kepubs[volume_id]
+        context = BookmarkContext.extract(bookmark_row, kepub.kepub)
+        kepubs[volume_id].bookmarks.append(KEPUBBookmarks.Pair(bookmark_row, context))  # nopep8
 
     for volume_id, kepub in kepubs.items():
+        print(f'{volume_id}...')
+
         toc = kepub.metadata.table_of_contents
         toc_indices = {k: i for i, k in enumerate(toc)}
-        kepub.bookmark_rows.sort(
-            key=lambda bkmrk: (
-                toc_indices[ContentID.parse(bkmrk.content_id).xhtml],
-                bkmrk.start_container_path  # TODO: Clarify
+
+        kepub.bookmarks.sort(
+            key=lambda pair: (
+                toc_indices[pair.context.content_id.xhtml],
+                pair.context.bookmark_start.tag.sourceline,
+                pair.context.bookmark_start.tag.sourcepos,
             )
         )
 
-        file = kepub.kepub.file
-        _, filename = os.path.split(file)
-        filename_no_ext, _ = os.path.splitext(filename)
         dst_file = os.path.join(
             OUTPUT_DIR,
-            FORMATTER.filename(filename_no_ext)
+            FORMATTER.filename(kepub.kepub, kepub.metadata)
         )
 
-        chapters: List[str] = []
-        for bookmark_row in kepub.bookmark_rows:
-            chapter = bookmark_row.content_id  # TODO
-            chapters.append(chapter)
-
         with open(dst_file, 'w', encoding=ENCODING) as fd:
-            chapter = chapters[0]
-            fd.write(FORMATTER.new_chapter(chapter))
+            begin_md = FORMATTER.begin(kepub.kepub, kepub.metadata)
+            fd.write(begin_md)
 
-            for bookmark_row, bookmark_chapter in zip(kepub.bookmark_rows, chapters, strict=True):
-                if bookmark_chapter != chapter:
-                    chapter = bookmark_chapter
-                    fd.write(FORMATTER.new_chapter(chapter))
+            # First chapter
+            pair = kepub.bookmarks[0]
+            args = IFormatter.FormattingParams(
+                pair.bookmark, pair.context, kepub.kepub, kepub.metadata)
+
+            new_chapter_md = FORMATTER.new_chapter(args)
+            fd.write(new_chapter_md)
+            # END: First chapter
+
+            chapter = pair.context.bookmark_chapter
+            for pair in kepub.bookmarks:
+                context = pair.context
+                bookmark_row = pair.bookmark
+
+                args = IFormatter.FormattingParams(
+                    bookmark_row, context, kepub.kepub, kepub.metadata)
+
+                if context.bookmark_chapter != chapter:
+                    chapter = context.bookmark_chapter
+
+                    new_chapter_md = FORMATTER.new_chapter(args)
+                    fd.write(new_chapter_md)
 
                 match bookmark_row.bookmark_type:
                     case BookmarkTable.BookmarkType.NOTE:
-                        fd.write(FORMATTER.format_note(bookmark_row, chapter, kepub.kepub))  # nopep8
+                        bookmark_md = FORMATTER.format_note(args)
                     case BookmarkTable.BookmarkType.HIGHLIGHT:
-                        fd.write(FORMATTER.format_highlight(bookmark_row, chapter, kepub.kepub))  # nopep8
+                        bookmark_md = FORMATTER.format_highlight(args)
                     case _:
                         raise NotImplementedError(bookmark_row.bookmark_type)
+
+                fd.write(bookmark_md)
+
+            end_md = FORMATTER.end(kepub.kepub, kepub.metadata)
+            fd.write(end_md)
 
     return exit_code
 
