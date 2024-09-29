@@ -109,7 +109,7 @@ def main() -> int:
             # First chapter
             pair = kepub.bookmarks[0]
             args = IFormatter.FormattingParams(
-                pair.bookmark, pair.context, kepub.kepub, kepub.metadata)
+                pair.bookmark, pair.context, kepub.kepub, kepub.metadata, OUTPUT_DIR)
 
             new_chapter_md = FORMATTER.new_chapter(args)
             fd.write(new_chapter_md)
@@ -121,7 +121,7 @@ def main() -> int:
                 bookmark_row = pair.bookmark
 
                 args = IFormatter.FormattingParams(
-                    bookmark_row, context, kepub.kepub, kepub.metadata)
+                    bookmark_row, context, kepub.kepub, kepub.metadata, OUTPUT_DIR)
 
                 if context.bookmark_chapter != chapter:
                     chapter = context.bookmark_chapter

@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from typing import List, Callable
+from urllib import parse as urllib_parse
 
 from bs4 import PageElement, Tag
 
@@ -17,12 +18,14 @@ class IFormatter:
                 bookmark: BookmarkTable,
                 context: BookmarkContext,
                 kepub: KEPUB,
-                metadata: KEPUB.Metadata
+                metadata: KEPUB.Metadata,
+                output_dir: str,
         ) -> None:
             self.bookmark = bookmark
             self.context = context
             self.kepub = kepub
             self.metadata = metadata
+            self.output_dir = output_dir
 
     def filename(self, kepub: KEPUB, metadata: KEPUB.Metadata) -> str:
         raise NotImplementedError(type(self))
@@ -204,6 +207,8 @@ class MarkdownFormatter(IFormatter):
                 return self._format_link
             case 'p':
                 return self._format_paragraph
+            case 'img':
+                return self._format_img
             case 'table':
                 return self._format_table
             case 'span':
@@ -252,8 +257,32 @@ class MarkdownFormatter(IFormatter):
         return markdown
 
     def _format_img(self, element: Element, formatting: Formatting) -> str:
-        # TODO
-        return self._format_html(element, formatting)
+        kepub = formatting.args.kepub
+        metadata = formatting.args.metadata
+        content_id = formatting.args.context.content_id
+        output_dir = formatting.args.output_dir
+
+        src = element.get_attr('src')
+        xhtml_dir, _ = os.path.split(content_id.xhtml)
+        zip_name = os.path.normpath(os.path.join(xhtml_dir, src))
+        if os.name == 'nt':
+            zip_name = '/'.join(zip_name.split(os.sep))
+
+        dirname = f'{self.filename(kepub, metadata)}.imgs'
+        imgs_dir = os.path.join(output_dir, dirname)
+        os.makedirs(imgs_dir, exist_ok=True)
+
+        _, img_filename = os.path.split(src)
+        file = os.path.join(imgs_dir, img_filename)
+        with open(file, 'wb') as fd:
+            bytes = kepub.read(zip_name)
+            fd.write(bytes)
+
+        markdown_path = f'{dirname}/{img_filename}'
+        markdown_path = urllib_parse.quote(markdown_path)
+        markdown = f'![{img_filename}]({markdown_path})'
+
+        return markdown
 
     def _format_table(self, element: Element, formatting: Formatting) -> str:
         headers: List[str] = []
