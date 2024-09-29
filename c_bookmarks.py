@@ -66,7 +66,6 @@ class MarkdownFormatter(IFormatter):
             created_str: str,
             modified_str: str,
             annotation_str: str,
-            no_chapter_str: str,
             empty_table_cell_str: str
     ) -> None:
         self.indent = indent
@@ -74,7 +73,6 @@ class MarkdownFormatter(IFormatter):
         self.created_str = created_str
         self.modified_str = modified_str
         self.annotation_str = annotation_str
-        self.no_chapter_str = no_chapter_str
         self.empty_table_cell_str = empty_table_cell_str
 
         self.local_tz = datetime.now().astimezone().tzinfo
@@ -117,23 +115,7 @@ class MarkdownFormatter(IFormatter):
         return markdown
 
     def new_chapter(self, args: IFormatter.FormattingParams) -> str:
-        chapters_md: List[str] = []
-        chapters = args.context.chapters
-        if len(chapters) == 0:
-            chapters_md.append(self.no_chapter_str)
-        else:
-            formatting = MarkdownFormatter.Formatting(args, self)
-
-            for level in sorted(chapters.keys()):
-                chapter = chapters[level]
-
-                children_md = self._format_children(chapter, formatting)
-                chapters_md.append(children_md)
-
-        markdown = f'## '
-        markdown += ' / '.join(chapters_md)
-
-        markdown += f'\n'
+        markdown = f'## {args.context.chapter}\n'
         return markdown
 
     def format_note(self, args: IFormatter.FormattingParams) -> str:

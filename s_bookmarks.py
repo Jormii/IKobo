@@ -17,7 +17,6 @@ TIMESTAMP_FMT = '%Y-%m-%d'
 CREATED_STR = 'Creado'
 MODIFIED_STR = 'Modificado'
 ANNOTATION_STR = 'Anotación'
-NO_CHAPTER_STR = '(...)'
 EMPTY_TABLE_CELL_STR = '(...)'
 
 FORMATTER = MarkdownFormatter(
@@ -26,7 +25,6 @@ FORMATTER = MarkdownFormatter(
     CREATED_STR,
     MODIFIED_STR,
     ANNOTATION_STR,
-    NO_CHAPTER_STR,
     EMPTY_TABLE_CELL_STR
 )
 # --------------------------------------------------------------------------------
@@ -115,7 +113,7 @@ def main() -> int:
             fd.write(new_chapter_md)
             # END: First chapter
 
-            chapter = pair.context.bookmark_chapter
+            chapter = pair.context.chapter
             for pair in kepub.bookmarks:
                 context = pair.context
                 bookmark_row = pair.bookmark
@@ -123,8 +121,8 @@ def main() -> int:
                 args = IFormatter.FormattingParams(
                     bookmark_row, context, kepub.kepub, kepub.metadata, OUTPUT_DIR)
 
-                if context.bookmark_chapter != chapter:
-                    chapter = context.bookmark_chapter
+                if context.chapter != chapter:
+                    chapter = context.chapter
 
                     new_chapter_md = FORMATTER.new_chapter(args)
                     fd.write(new_chapter_md)

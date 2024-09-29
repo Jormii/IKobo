@@ -113,10 +113,10 @@ class KEPUB:
 
 class ContentID:
 
-    def __init__(self, file: str, xhtml: str, element: str | None) -> None:
+    def __init__(self, file: str, xhtml: str, element_id: str | None) -> None:
         self.file = file
         self.xhtml = xhtml
-        self.element = element
+        self.element_id = element_id
 
     @staticmethod
     def parse(content_id: str) -> ContentID:
@@ -127,17 +127,17 @@ class ContentID:
 
         rel_file = search.group(1)
         xhtml = search.group(2)
-        element = search.group(3)
+        element_id = search.group(3)
 
         file = _format_path(rel_file)
-        return ContentID(file, xhtml, element)
+        return ContentID(file, xhtml, element_id)
 
 
 class BookmarkContext:
 
     def __init__(
             self,
-            chapters: Dict[int, Element],
+            chapter: str,
             containers: List[Element],
             content_id: ContentID,
             bookmark_start: Element,
@@ -145,7 +145,7 @@ class BookmarkContext:
             bookmark_end: Element,
             bookmark_end_offset: int,
     ) -> None:
-        self.chapters = chapters
+        self.chapter = chapter
         self.containers = containers
         self.content_id = content_id
         self.bookmark_start = bookmark_start
@@ -153,25 +153,23 @@ class BookmarkContext:
         self.bookmark_end = bookmark_end
         self.bookmark_end_offset = bookmark_end_offset
 
-        self.bookmark_chapter: Element | None = None
-        if len(self.chapters) != 0:
-            max_key = max(self.chapters.keys())
-            self.bookmark_chapter = self.chapters[max_key]
-
         # NOTE: Provisional
         assert self.bookmark_start.name == 'span'
         assert self.bookmark_end.name == 'span'
 
     @staticmethod
     def extract(bookmark: BookmarkTable, kepub: KEPUB) -> BookmarkContext:
-        CHAPTER_TAGS = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
-
         content = ContentID.parse(bookmark.content_id)
         assert bookmark.volume_id == kepub.volume_id and content.file == kepub.file
 
         xhtml = kepub.read_str(content.xhtml)
         parsed_xhtml = Element.parse_html(xhtml)
+
+        head = parsed_xhtml.find('head')
         inner_div = parsed_xhtml.find_with_id('div', 'book-inner')
+
+        title = head.find('title')
+        chapter = title.text
 
         bookmark_start, start_parent = BookmarkContext._extract(
             bookmark.start_container_path, inner_div, grab_first_or_last=True)
@@ -188,21 +186,8 @@ class BookmarkContext:
             else:
                 del containers[i]
 
-        top_container = containers[0]
-        siblings = top_container.prev_siblings()
-        siblings.insert(0, top_container)
-
-        chapters: Dict[int, Element] = {}
-        for i in range(len(siblings)):
-            sibling = siblings[i]
-
-            if sibling.name in CHAPTER_TAGS:
-                level = int(sibling.name[1])  # hX
-                if level not in chapters:
-                    chapters[level] = sibling
-
         return BookmarkContext(
-            chapters,
+            chapter,
             containers,
             content,
             bookmark_start,
@@ -248,7 +233,7 @@ class BookmarkContext:
 class BookmarkTable:
 
     class BookmarkType(IntEnum):
-        NOTE = 0
+        NOTE = auto()
         HIGHLIGHT = auto()
 
     TYPE_MAPPING: Dict[str, BookmarkType] = {
