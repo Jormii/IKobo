@@ -9,20 +9,35 @@ from kobo import KEPUB, BookmarkContext, BookmarkTable
 from web import Element
 
 
+class KEPUBBookmarks:
+
+    class Pair:
+
+        def __init__(self, bookmark: BookmarkTable, context: BookmarkContext) -> None:
+            self.bookmark = bookmark
+            self.context = context
+
+    def __init__(self, kepub: KEPUB, metadata: KEPUB.Metadata) -> None:
+        self.kepub = kepub
+        self.metadata = metadata
+
+        self.pairs: List[KEPUBBookmarks.Pair] = []
+
+
 class IFormatter:
 
     class FormattingParams:
 
         def __init__(
                 self,
-                bookmark: BookmarkTable,
-                context: BookmarkContext,
+                pairs: List[KEPUBBookmarks.Pair],
+                containers: List[Element],
                 kepub: KEPUB,
                 metadata: KEPUB.Metadata,
                 output_dir: str,
         ) -> None:
-            self.bookmark = bookmark
-            self.context = context
+            self.pairs = pairs
+            self.containers = containers
             self.kepub = kepub
             self.metadata = metadata
             self.output_dir = output_dir
@@ -54,10 +69,17 @@ class MarkdownFormatter(IFormatter):
             self.args = args
             self.formatter = formatter
 
+            self.pair_idx = 0
             self.indentation_level = 0
 
         def indentation(self) -> str:
             return self.indentation_level * ' '
+
+        def get_bookmark(self) -> KEPUBBookmarks.Pair | None:
+            if self.pair_idx >= len(self.args.pairs):
+                return None
+
+            return self.args.pairs[self.pair_idx]
 
     def __init__(
             self,
@@ -113,30 +135,26 @@ class MarkdownFormatter(IFormatter):
         return markdown
 
     def new_chapter(self, args: IFormatter.FormattingParams) -> str:
-        markdown = f'## {args.context.chapter}\n'
+        context = args.pairs[0].context
+        markdown = f'## {context.chapter}\n'
+
         return markdown
 
     def format_note(self, args: IFormatter.FormattingParams) -> str:
         markdown = self._quote_bookmark(args)
-        markdown += f'>> **{self.annotation_str}**: {args.bookmark.annotation}\n'
-        markdown += '\n'
-
         return markdown
 
     def format_highlight(self, args: IFormatter.FormattingParams) -> str:
         markdown = self._quote_bookmark(args)
-        markdown += '\n'
-
         return markdown
 
     def _quote_bookmark(self, args: IFormatter.FormattingParams) -> str:
-        bookmark = args.bookmark
-        containers = args.context.containers
+        containers = args.containers
         containers_md = self.format_args(args)
 
         markdown = ''
 
-        _zip = zip(args.context.containers, containers_md, strict=True)
+        _zip = zip(containers, containers_md, strict=True)
         for i, (container, container_md) in enumerate(_zip):
             splitted = container_md.split('\n')
             lines = [l for l in splitted if len(l) != 0]
@@ -155,10 +173,23 @@ class MarkdownFormatter(IFormatter):
 
             markdown += f'{container_md}{newline}'
 
-        markdown += '>\n'
-        markdown += f'>> **{self.created_str}**: {self.timestamp_str(bookmark.date_created)} \\\n'
-        markdown += f'>> **{self.modified_str}**: {self.timestamp_str(bookmark.date_modified)}\n'
+        for i, pair in enumerate(args.pairs):
+            bookmark = pair.bookmark
+            is_note = bookmark.bookmark_type == BookmarkTable.BookmarkType.NOTE
 
+            footnote_md = f'IK.{i + 1}'
+            bookmark_endl = ' \\\n' if is_note else '\n'
+
+            markdown += '> ___\n'
+            markdown += f'>> {footnote_md} \\\n'
+            markdown += f'>> **{self.created_str}**: {self.timestamp_str(bookmark.date_created)} \\\n'
+            markdown += f'>> **{self.modified_str}**: {self.timestamp_str(bookmark.date_modified)}{bookmark_endl}'
+
+            if is_note:
+                markdown += ''
+                markdown += f'>> **{self.annotation_str}**: {bookmark.annotation}\n'
+
+        markdown += '\n'
         return markdown
 
     def timestamp_str(self, timestamp: datetime) -> str:
@@ -171,7 +202,7 @@ class MarkdownFormatter(IFormatter):
         containers_md: List[str] = []
 
         formatting = MarkdownFormatter.Formatting(args, self)
-        for element in args.context.containers:
+        for element in args.containers:
             container_md = self._format_fp(element)(element, formatting)
             containers_md.append(container_md)
 
@@ -239,8 +270,11 @@ class MarkdownFormatter(IFormatter):
     def _format_img(self, element: Element, formatting: Formatting) -> str:
         kepub = formatting.args.kepub
         metadata = formatting.args.metadata
-        content_id = formatting.args.context.content_id
         output_dir = formatting.args.output_dir
+        pair = formatting.get_bookmark()
+
+        assert pair is not None
+        content_id = pair.context.content_id
 
         src = element.get_attr('src')
         xhtml_dir, _ = os.path.split(content_id.xhtml)
@@ -329,10 +363,20 @@ class MarkdownFormatter(IFormatter):
     def _format_span(self, element: Element, formatting: Formatting) -> str:
         markdown = self._format_children(element, formatting)
 
-        context = formatting.args.context
+        pair = formatting.get_bookmark()
+        if pair is None:
+            return markdown
+
+        context = pair.context
+
         if element == context.bookmark_end:
             idx = context.bookmark_end_offset
-            markdown = f'{markdown[:idx]}</b></u>{markdown[idx:]}'
+            bookmark_idx = formatting.pair_idx
+
+            sup_md = f'<sup>[IK.{bookmark_idx + 1}]</sup>'
+            markdown = f'{markdown[:idx]}</b></u>{sup_md}{markdown[idx:]}'
+
+            formatting.pair_idx += 1
 
         if element == context.bookmark_start:
             idx = context.bookmark_start_offset
