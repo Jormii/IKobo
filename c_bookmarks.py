@@ -136,8 +136,16 @@ class MarkdownFormatter(IFormatter):
 
     def new_chapter(self, args: IFormatter.FormattingParams) -> str:
         context = args.pairs[0].context
-        markdown = f'## {context.chapter}\n'
+        formatting = MarkdownFormatter.Formatting(args, self)
 
+        headings_md: List[str] = []
+        for level in sorted(context.headings.keys()):
+            heading = context.headings[level]
+
+            heading_md = self._format_children(heading, formatting)
+            headings_md.append(heading_md)
+
+        markdown = f'## {" / ".join(headings_md)}\n'
         return markdown
 
     def format_note(self, args: IFormatter.FormattingParams) -> str:
@@ -250,8 +258,6 @@ class MarkdownFormatter(IFormatter):
         href = element.get_attr_or_none('href')
         if href is None:
             return ''  # TODO
-
-        # TODO: Internal links
 
         children_md = self._format_children(element, formatting)
         markdown = f'<a href={href}>{children_md}</a>'

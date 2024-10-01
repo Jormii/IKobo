@@ -29,8 +29,6 @@ FORMATTER = MarkdownFormatter(
 )
 # --------------------------------------------------------------------------------
 
-# TODO: Improve chapters
-
 
 class GroupedBookmarks:
 
@@ -111,14 +109,14 @@ def main() -> int:
             fd.write(new_chapter_md)
             # END: First chapter
 
-            chapter = g_pairs.pairs[0].context.chapter
+            heading = g_pairs.pairs[0].context.top_heading
             for g_pairs in grouped_pairs:
                 args = IFormatter.FormattingParams(
                     g_pairs.pairs, g_pairs.containers, kepub.kepub, kepub.metadata, OUTPUT_DIR)
 
-                g_chapter = g_pairs.pairs[0].context.chapter
-                if g_chapter != chapter:
-                    chapter = g_chapter
+                g_heading = g_pairs.pairs[0].context.top_heading
+                if g_heading != heading:
+                    heading = g_heading
 
                     new_chapter_md = FORMATTER.new_chapter(args)
                     fd.write(new_chapter_md)
@@ -146,7 +144,7 @@ def _group_bookmarks(pairs: List[KEPUBBookmarks.Pair]) -> List[GroupedBookmarks]
     while begin < len(pairs):
         begin_pair = pairs[begin]
 
-        begin_chapter = begin_pair.context.chapter
+        begin_heading = begin_pair.context.top_heading
         begin_xhtml = begin_pair.context.content_id.xhtml
         bottommost_container = begin_pair.context.containers[-1]
 
@@ -154,14 +152,14 @@ def _group_bookmarks(pairs: List[KEPUBBookmarks.Pair]) -> List[GroupedBookmarks]
         while end < len(pairs):
             end_pair = pairs[end]
 
-            end_chapter = end_pair.context.chapter
+            end_heading = end_pair.context.top_heading
             end_xhtml = end_pair.context.content_id.xhtml
             end_first_container = end_pair.context.containers[0]
 
             if end_xhtml != begin_xhtml:
                 break
 
-            if end_chapter != begin_chapter:
+            if end_heading != begin_heading:
                 break
 
             end_sourceline = end_first_container.tag.sourceline

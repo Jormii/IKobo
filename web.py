@@ -79,15 +79,15 @@ class Element:
 
         return children
 
-    def prev_siblings(self) -> List[Element]:
-        siblings = self._siblings(previous_or_next=True)
+    def prev_siblings(self, add_self: bool = False) -> List[Element]:
+        siblings = self._siblings(previous_or_next=True, add_self=add_self)
         return siblings
 
-    def next_siblings(self) -> List[Element]:
-        siblings = self._siblings(previous_or_next=False)
+    def next_siblings(self, add_self: bool = False) -> List[Element]:
+        siblings = self._siblings(previous_or_next=False, add_self=add_self)
         return siblings
 
-    def _siblings(self, previous_or_next: bool) -> List[Element]:
+    def _siblings(self, previous_or_next: bool, add_self: bool = False) -> List[Element]:
 
         def _next(_tag: PageElement) -> PageElement | None:
             if previous_or_next:
@@ -97,8 +97,11 @@ class Element:
 
         assert (parent := self.tag.parent) is not None
 
-        element = _next(self.tag)
         siblings: List[Element] = []
+        if add_self:
+            siblings.append(self)
+
+        element = _next(self.tag)
         while element is not None:
             assert (e_parent := element.parent) is not None
             if e_parent != parent:
@@ -173,7 +176,7 @@ class Element:
     def __eq__(self, __value: object) -> bool:
         if not isinstance(__value, Element):
             return False
-        
+
         return self.tag == __value.tag
 
     def __repr__(self) -> str:

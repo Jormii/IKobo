@@ -137,7 +137,7 @@ class BookmarkContext:
 
     def __init__(
             self,
-            chapter: str,
+            headings: Dict[int, Element],
             containers: List[Element],
             content_id: ContentID,
             bookmark_start: Element,
@@ -145,13 +145,16 @@ class BookmarkContext:
             bookmark_end: Element,
             bookmark_end_offset: int,
     ) -> None:
-        self.chapter = chapter
+        self.headings = headings
         self.containers = containers
         self.content_id = content_id
         self.bookmark_start = bookmark_start
         self.bookmark_start_offset = bookmark_start_offset
         self.bookmark_end = bookmark_end
         self.bookmark_end_offset = bookmark_end_offset
+
+        top_level = min(self.headings)
+        self.top_heading = self.headings[top_level]
 
         # NOTE: Provisional
         assert self.bookmark_start.name == 'span'
@@ -186,8 +189,30 @@ class BookmarkContext:
             else:
                 del containers[i]
 
+        HEADING_REGEX = r'^h(\d)$'
+        headings: Dict[int, Element] = {}
+        siblings = containers[0].prev_siblings(add_self=True)
+        for sibling in siblings:
+            search = re.search(HEADING_REGEX, sibling.name)
+            if search is None:
+                continue
+
+            level = int(search.group(1))
+            if level not in headings:
+                headings[level] = sibling
+
+        if len(headings) == 0:
+            children = inner_div.children()
+            for child in children:
+                child_text = child.text.strip()
+                if len(child_text) != 0:
+                    break
+
+            level = -1  # NOTE: To identify when this happens
+            headings[level] = child
+
         return BookmarkContext(
-            chapter,
+            headings,
             containers,
             content,
             bookmark_start,
