@@ -4,10 +4,10 @@ from typing import Dict, List
 
 import anki
 from anki import Note
-from c_anki_notes import Deck, INote
 from kobo import WordListTable
 from web import Selenium
 
+from c_anki_notes import Deck, INote
 
 # NOTE: Configure these
 # --------------------------------------------------------------------------------

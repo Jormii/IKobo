@@ -167,12 +167,7 @@ class BookmarkContext:
 
         xhtml = kepub.read_str(content.xhtml)
         parsed_xhtml = Element.parse_html(xhtml)
-
-        head = parsed_xhtml.find('head')
         inner_div = parsed_xhtml.find_with_id('div', 'book-inner')
-
-        title = head.find('title')
-        chapter = title.text
 
         bookmark_start, start_parent = BookmarkContext._extract(
             bookmark.start_container_path, inner_div, grab_first_or_last=True)
@@ -233,7 +228,7 @@ class BookmarkContext:
         assert search is not None
 
         tag, id = search.groups()
-        id = id.replace('\.', '.')  # NOTE: '.' are escaped as '\.'
+        id = id.replace('\\.', '.')  # NOTE: '.' are escaped as '\.'
 
         # NOTE: Apparently there is an odd behavior when highlights are near images
         #   Scenarios found so far:

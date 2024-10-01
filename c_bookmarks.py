@@ -165,13 +165,13 @@ class MarkdownFormatter(IFormatter):
         _zip = zip(containers, containers_md, strict=True)
         for i, (container, container_md) in enumerate(_zip):
             splitted = container_md.split('\n')
-            lines = [l for l in splitted if len(l) != 0]
+            lines = [line for line in splitted if len(line) != 0]
 
             if container.name != 'table':
                 container_md = '\n'.join(lines)
                 container_md = f'> {container_md}'
             else:
-                rows_md = [f'> {l}' for l in lines]
+                rows_md = [f'> {line}' for line in lines]
                 container_md = '\n'.join(rows_md)
 
             if (i + 1) != len(containers):
@@ -257,7 +257,7 @@ class MarkdownFormatter(IFormatter):
     def _format_link(self, element: Element, formatting: Formatting) -> str:
         href = element.get_attr_or_none('href')
         if href is None:
-            return ''  # TODO
+            return ''
 
         children_md = self._format_children(element, formatting)
         markdown = f'<a href={href}>{children_md}</a>'
