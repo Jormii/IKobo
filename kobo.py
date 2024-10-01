@@ -39,17 +39,31 @@ class KEPUB:
         self.encoding = encoding
 
         self.zip_file = ZipFile(self.file)
-        self.zip_cache: Dict[str, bytes] = {}
+        self.zip_cache: Dict[int, bytes] = {}
+        self.html_cache: Dict[int, Element] = {}
 
     def read(self, zip_name: str) -> bytes:
-        if zip_name not in self.zip_cache:
-            self.zip_cache[zip_name] = self.zip_file.read(zip_name)
+        cache_key = hash(zip_name)
+        if cache_key in self.zip_cache:
+            bytes = self.zip_cache[cache_key]
+        if cache_key not in self.zip_cache:
+            bytes = self.zip_file.read(zip_name)
+            self.zip_cache[cache_key] = bytes
 
-        return self.zip_cache[zip_name]
+        return bytes
 
-    def read_str(self, zip_name: str) -> str:
-        bytes = self.read(zip_name)
-        return bytes.decode(self.encoding)
+    def read_html(self, zip_name: str) -> Element:
+        cache_key = hash(zip_name)
+        if cache_key in self.html_cache:
+            parsed_html = self.html_cache[cache_key]
+        else:
+            bytes = self.read(zip_name)
+            html = bytes.decode(self.encoding)
+            parsed_html = Element.parse_html(html)
+
+            self.html_cache[cache_key] = parsed_html
+
+        return parsed_html
 
     @staticmethod
     def is_kepub(volume_id: str) -> bool:
@@ -65,15 +79,14 @@ class KEPUB:
         file = volume_id_file(volume_id)
         kepub = KEPUB(file, volume_id, encoding)
 
-        content = kepub.read_str('content.opf')
-        parsed_content = Element.parse_html(content)
-        content_metadata = parsed_content.find('metadata')
+        content = kepub.read_html('content.opf')
+        content_metadata = content.find('metadata')
 
         title = KEPUB._metadata('dc:title', content_metadata)
         author = KEPUB._metadata('dc:creator', content_metadata)
         timestamp_str = KEPUB._metadata('dc:date', content_metadata)
         publisher = KEPUB._metadata('dc:publisher', content_metadata)
-        table_of_contents = KEPUB._table_of_contents(parsed_content)
+        table_of_contents = KEPUB._table_of_contents(content)
 
         timestamp: datetime | None = None
         if timestamp_str is not None:
@@ -165,9 +178,8 @@ class BookmarkContext:
         content = ContentID.parse(bookmark.content_id)
         assert bookmark.volume_id == kepub.volume_id and content.file == kepub.file
 
-        xhtml = kepub.read_str(content.xhtml)
-        parsed_xhtml = Element.parse_html(xhtml)
-        inner_div = parsed_xhtml.find_with_id('div', 'book-inner')
+        xhtml = kepub.read_html(content.xhtml)
+        inner_div = xhtml.find_with_id('div', 'book-inner')
 
         bookmark_start, start_parent = BookmarkContext._extract(
             bookmark.start_container_path, inner_div, grab_first_or_last=True)
@@ -206,7 +218,7 @@ class BookmarkContext:
             level = -1  # NOTE: To identify when this happens
             headings[level] = child
 
-        return BookmarkContext(
+        context = BookmarkContext(
             headings,
             containers,
             content,
@@ -215,6 +227,7 @@ class BookmarkContext:
             bookmark_end,
             bookmark.end_offset,
         )
+        return context
 
     @staticmethod
     def _extract(

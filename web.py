@@ -1,6 +1,6 @@
 from __future__ import annotations
 import time
-from typing import List, Set
+from typing import Dict, List, Set
 
 from bs4 import BeautifulSoup, PageElement, Tag
 from selenium import webdriver  # type: ignore
@@ -10,12 +10,27 @@ from selenium.webdriver.remote.webelement import WebElement  # type: ignore
 
 class Element:
 
+    class FindIdCacheKey:
+
+        def __init__(self, name: str, id: str) -> None:
+            self.name = name
+            self.id = id
+
+        def __hash__(self) -> int:
+            return hash((self.name, self.id))
+
+        def __eq__(self, __value: object) -> bool:
+            assert isinstance(__value, Element.FindIdCacheKey)
+            return hash(self) == hash(__value)
+
     def __init__(self, tag: Tag, parsed_html: BeautifulSoup) -> None:
         self.tag = tag
         self.parsed_html = parsed_html
 
         self.name = self.tag.name
         self.text = self.tag.text.strip()
+
+        self.find_id_cache: Dict[Element.FindIdCacheKey, List[Element]] = {}
 
     def cls(self) -> str:
         return self.get_attr('class')
@@ -165,8 +180,14 @@ class Element:
             return elements[0]
 
     def find_all_with_id(self, name: str, id: str) -> List[Element]:
-        tags = self.tag.find_all(name, {'id': id})
-        elements = [Element(tag, self.parsed_html) for tag in tags]
+        cache_key = Element.FindIdCacheKey(name, id)
+        if cache_key in self.find_id_cache:
+            elements = self.find_id_cache[cache_key]
+        else:
+            tags = self.tag.find_all(name, {'id': id})
+            elements = [Element(tag, self.parsed_html) for tag in tags]
+
+            self.find_id_cache[cache_key] = elements
 
         return elements
 

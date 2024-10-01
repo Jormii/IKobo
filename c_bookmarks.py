@@ -69,17 +69,18 @@ class MarkdownFormatter(IFormatter):
             self.args = args
             self.formatter = formatter
 
-            self.pair_idx = 0
             self.indentation_level = 0
+            self.unquoted_pair_indices = set(range(len(self.args.pairs)))
 
         def indentation(self) -> str:
             return self.indentation_level * ' '
 
         def get_bookmark(self) -> KEPUBBookmarks.Pair | None:
-            if self.pair_idx >= len(self.args.pairs):
+            if len(self.unquoted_pair_indices) == 0:
                 return None
 
-            return self.args.pairs[self.pair_idx]
+            pair_idx = min(self.unquoted_pair_indices)
+            return self.args.pairs[pair_idx]
 
     def __init__(
             self,
@@ -213,6 +214,8 @@ class MarkdownFormatter(IFormatter):
         for element in args.containers:
             container_md = self._format_fp(element)(element, formatting)
             containers_md.append(container_md)
+
+        assert len(formatting.unquoted_pair_indices) == 0
 
         return containers_md
 
@@ -369,24 +372,30 @@ class MarkdownFormatter(IFormatter):
     def _format_span(self, element: Element, formatting: Formatting) -> str:
         markdown = self._format_children(element, formatting)
 
-        pair = formatting.get_bookmark()
-        if pair is None:
-            return markdown
+        pairs = formatting.args.pairs
+        in_span_indices: List[int] = []
+        for pair_idx in formatting.unquoted_pair_indices:
+            pair = pairs[pair_idx]
 
-        context = pair.context
+            context = pair.context
+            if element == context.bookmark_start or element == context.bookmark_end:
+                in_span_indices.append(pair_idx)
 
-        if element == context.bookmark_end:
-            idx = context.bookmark_end_offset
-            bookmark_idx = formatting.pair_idx
+        for pair_idx in sorted(in_span_indices, reverse=True):
+            pair = pairs[pair_idx]
+            context = pair.context
 
-            sup_md = f'<sup>[IK.{bookmark_idx + 1}]</sup>'
-            markdown = f'{markdown[:idx]}</b></u>{sup_md}{markdown[idx:]}'
+            if element == context.bookmark_end:
+                idx = context.bookmark_end_offset
 
-            formatting.pair_idx += 1
+                sup_md = f'<sup>[IK.{pair_idx + 1}]</sup>'
+                markdown = f'{markdown[:idx]}</b></u>{sup_md}{markdown[idx:]}'
 
-        if element == context.bookmark_start:
-            idx = context.bookmark_start_offset
-            markdown = f'{markdown[:idx]}<u><b>{markdown[idx:]}'
+                formatting.unquoted_pair_indices.remove(pair_idx)
+
+            if element == context.bookmark_start:
+                idx = context.bookmark_start_offset
+                markdown = f'{markdown[:idx]}<u><b>{markdown[idx:]}'
 
         return markdown
 
