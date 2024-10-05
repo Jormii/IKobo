@@ -55,7 +55,7 @@ def main() -> int:
         notes[deck.name] = []
         for word_row in word_rows_by_dict[dict_suffix]:
             args = INote.CreateParams(word_row.text, selenium)
-            inote = deck.inote_cls.create(args)
+            inote = deck.inote_cls.create(args)  # TODO: Create many
             if inote is None:
                 continue
 
