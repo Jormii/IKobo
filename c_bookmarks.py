@@ -139,7 +139,7 @@ class MarkdownFormatter(IFormatter):
         context = args.pairs[0].context
         formatting = MarkdownFormatter.Formatting(args, self)
 
-        headings_md: List[str] = []
+        headings_md = [context.title]
         for level in sorted(context.headings.keys()):
             heading = context.headings[level]
 

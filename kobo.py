@@ -39,8 +39,13 @@ class KEPUB:
         self.encoding = encoding
 
         self.zip_file = ZipFile(self.file)
+        self.zip_names = set(self.zip_file.namelist())
+
         self.zip_cache: Dict[int, bytes] = {}
         self.html_cache: Dict[int, Element] = {}
+
+    def contains(self, zip_name: str) -> bool:
+        return zip_name in self.zip_names
 
     def read(self, zip_name: str) -> bytes:
         cache_key = hash(zip_name)
@@ -76,10 +81,23 @@ class KEPUB:
 
     @staticmethod
     def open(volume_id: str, encoding: str) -> Tuple[KEPUB, Metadata]:
+        CONTENT_OPF_ZIP_NAMES = [
+            'content.opf',
+            'OEBPS/content.opf',
+        ]
+
         file = volume_id_file(volume_id)
         kepub = KEPUB(file, volume_id, encoding)
 
-        content = kepub.read_html('content.opf')
+        content: Element | None = None
+        for content_zip_name in CONTENT_OPF_ZIP_NAMES:
+            if not kepub.contains(content_zip_name):
+                continue
+
+            content = kepub.read_html(content_zip_name)
+            break
+
+        assert content is not None
         content_metadata = content.find('metadata')
 
         title = KEPUB._metadata('dc:title', content_metadata)
@@ -97,11 +115,20 @@ class KEPUB:
 
     @staticmethod
     def _metadata(name: str, metadata: Element) -> str | None:
-        dc = metadata.find_or_none(name)
-        if dc is None:
+        dcs = metadata.find_all(name)
+
+        # NOTE: Default to metadata without attributes
+        for i in reversed(range(len(dcs))):
+            dc = dcs[i]
+            if len(dc.tag.attrs) != 0:
+                del dcs[i]
+
+        assert len(dcs) <= 1
+
+        if len(dcs) == 0:
             return None
         else:
-            return dc.text
+            return dcs[0].text
 
     @staticmethod
     def _table_of_contents(content: Element) -> List[str]:
@@ -126,30 +153,38 @@ class KEPUB:
 
 class ContentID:
 
-    def __init__(self, file: str, xhtml: str, element_id: str | None) -> None:
+    def __init__(self, file: str, rel_dir: str, rel_xhtml: str, element_id: str | None) -> None:
         self.file = file
-        self.xhtml = xhtml
+        self.rel_dir = rel_dir
+        self.rel_xhtml = rel_xhtml
         self.element_id = element_id
+
+        self.xhtml = f'{self.rel_dir}/{self.rel_xhtml}'
 
     @staticmethod
     def parse(content_id: str) -> ContentID:
-        CONTENT_ID_REGEX = r'^/mnt/onboard/(.*)!!(.*?)(?:#(.*))?$'
+        CONTENT_ID_REGEX = r'^/mnt/onboard/(.*)!(.*)?!/(.*?)(?:#(.*))?$'
 
         search = re.search(CONTENT_ID_REGEX, content_id)
         assert search is not None
 
         rel_file = search.group(1)
-        xhtml = search.group(2)
-        element_id = search.group(3)
+        rel_dir = search.group(2)
+        rel_xhtml = search.group(3)
+        element_id = search.group(4)
+
+        if rel_dir is None:
+            rel_dir = ''
 
         file = _format_path(rel_file)
-        return ContentID(file, xhtml, element_id)
+        return ContentID(file, rel_dir, rel_xhtml, element_id)
 
 
 class BookmarkContext:
 
     def __init__(
             self,
+            title: str,
             headings: Dict[int, Element],
             containers: List[Element],
             content_id: ContentID,
@@ -158,6 +193,7 @@ class BookmarkContext:
             bookmark_end: Element,
             bookmark_end_offset: int,
     ) -> None:
+        self.title = title
         self.headings = headings
         self.containers = containers
         self.content_id = content_id
@@ -181,6 +217,13 @@ class BookmarkContext:
         xhtml = kepub.read_html(content.xhtml)
         inner_div = xhtml.find_with_id('div', 'book-inner')
 
+        # NOTE: Some inner divs contain themselves single divs
+        inner_div_children = inner_div.children()
+        while len(inner_div_children) == 1 and inner_div_children[0].name == 'div':
+            inner_div = inner_div_children[0]
+            inner_div_children = inner_div.children()
+
+        title = xhtml.find('head').find('title').text
         bookmark_start, start_parent = BookmarkContext._extract(
             bookmark.start_container_path, inner_div, grab_first_or_last=True)
         bookmark_end, end_parent = BookmarkContext._extract(
@@ -219,6 +262,7 @@ class BookmarkContext:
             headings[level] = child
 
         context = BookmarkContext(
+            title,
             headings,
             containers,
             content,

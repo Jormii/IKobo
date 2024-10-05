@@ -82,7 +82,7 @@ def main() -> int:
 
         kepub.pairs.sort(
             key=lambda pair: (
-                toc_indices[pair.context.content_id.xhtml],
+                toc_indices[pair.context.content_id.rel_xhtml],
                 pair.context.bookmark_start.tag.sourceline,
                 pair.context.bookmark_start.tag.sourcepos,
             )
