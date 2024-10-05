@@ -237,7 +237,7 @@ class MarkdownFormatter(IFormatter):
                 return self._format_span
             case 'div':
                 return self._format_div
-            case 'em' | 'small' | 'sup' | 'sub':
+            case 'em' | 'small' | 'sup' | 'sub' | 'cite':
                 return self._format_html
             case _:
                 raise NotImplementedError(element.name)
@@ -352,13 +352,11 @@ class MarkdownFormatter(IFormatter):
 
         markdown = ''
 
-        # NOTE: The extra pipe makes single-column tables format correctly
-        #   and doesn't affect regular tables
         markdown += '| ' + ' | '.join(headers) + ' |\n'
-        markdown += '|' + '|'.join(width * ['---']) + '\n'
+        markdown += '| ' + ' | '.join(width * ['---']) + ' |\n'
 
         for row in rows:
-            markdown += '| ' + ' | '.join(row) + '\n'
+            markdown += '| ' + ' | '.join(row) + ' |\n'
 
         return markdown
 
