@@ -100,7 +100,6 @@ class MarkdownFormatter(IFormatter):
 
     def filename(self, kepub: KEPUB, metadata: KEPUB.Metadata) -> str:
         if metadata.title is None:
-            assert 0, 'NOT DEBUGGED'
             _, filename = os.path.split(kepub.file)
             filename, _ = os.path.splitext(filename)
         else:
@@ -118,22 +117,16 @@ class MarkdownFormatter(IFormatter):
     def begin(self, kepub: KEPUB, metadata: KEPUB.Metadata) -> str:
         title = metadata.title
         if title is None:
-            assert 0, 'NOT DEBUGGED'
             _, title = os.path.split(kepub.file)
             title, _ = os.path.splitext(title)
 
         markdown = '---\n---\n'
-        markdown += f'# {title}\n'
-        markdown += '> [!INFO] Tags\n'
-        markdown += '> - [[]]\n\n'
+        markdown += f'# {title}\n\n'
 
         return markdown
 
     def end(self, kepub: KEPUB, metadata: KEPUB.Metadata) -> str:
-        markdown = '# Referencias\n'
-        markdown += '- [[]]'
-
-        return markdown
+        return ''
 
     def new_chapter(self, args: IFormatter.FormattingParams) -> str:
         context = args.pairs[0].context
@@ -182,6 +175,7 @@ class MarkdownFormatter(IFormatter):
 
             markdown += f'{container_md}{newline}'
 
+        last_date: datetime | None = None
         for i, pair in enumerate(args.pairs):
             bookmark = pair.bookmark
             is_note = bookmark.bookmark_type == BookmarkTable.BookmarkType.NOTE
@@ -190,9 +184,12 @@ class MarkdownFormatter(IFormatter):
             bookmark_endl = ' \\\n' if is_note else '\n'
 
             markdown += '> ___\n'
-            markdown += f'>> {footnote_md} \\\n'
-            markdown += f'>> **{self.created_str}**: {self.timestamp_str(bookmark.date_created)} \\\n'
-            markdown += f'>> **{self.modified_str}**: {self.timestamp_str(bookmark.date_modified)}{bookmark_endl}'
+            if last_date is not None \
+                    and last_date.date() == bookmark.date_created.date():
+                markdown += f'>> {footnote_md}{bookmark_endl}'
+            else:
+                last_date = bookmark.date_created
+                markdown += f'>> {footnote_md} {self.timestamp_str(bookmark.date_created)}{bookmark_endl}'
 
             if is_note:
                 markdown += ''
@@ -229,6 +226,10 @@ class MarkdownFormatter(IFormatter):
                 return self._format_link
             case 'p':
                 return self._format_paragraph
+            case 'blockquote':
+                return self._format_blockquote
+            case 'ul':
+                return self._format_ul
             case 'img':
                 return self._format_img
             case 'table':
@@ -237,7 +238,7 @@ class MarkdownFormatter(IFormatter):
                 return self._format_span
             case 'div':
                 return self._format_div
-            case 'em' | 'small' | 'sup' | 'sub' | 'cite':
+            case 'br' | 'em' | 'small' | 'sup' | 'sub' | 'cite':
                 return self._format_html
             case _:
                 raise NotImplementedError(element.name)
@@ -273,6 +274,29 @@ class MarkdownFormatter(IFormatter):
         for content in element.tag.contents:
             child_md = self._format_content(content, element, formatting)
             markdown += child_md
+
+        return markdown
+
+    def _format_blockquote(self, element: Element, formatting: Formatting) -> str:
+        children_md = self._format_children(element, formatting)
+        markdown = f'{formatting.indentation()}> {children_md}'
+
+        return markdown
+
+    def _format_ul(self, element: Element, formatting: Formatting) -> str:
+        markdown = ''
+
+        for content in element.tag.contents:
+            if isinstance(content, str):
+                child_md: str = content
+            else:
+                assert isinstance(content, Tag)
+                assert content.name == 'li'
+
+                child = Element(content, element.parsed_html)
+                child_md = self._format_children(child, formatting)
+
+            markdown += f'{formatting.indentation()}- {child_md}'
 
         return markdown
 

@@ -134,6 +134,8 @@ def main() -> int:
             end_md = FORMATTER.end(kepub.kepub, kepub.metadata)
             fd.write(end_md)
 
+        BookmarkTable.delete_all([p.bookmark for p in kepub.pairs])
+
     return exit_code
 
 

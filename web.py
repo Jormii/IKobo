@@ -3,9 +3,9 @@ import time
 from typing import Dict, List, Set
 
 from bs4 import BeautifulSoup, PageElement, Tag
-from selenium import webdriver  # type: ignore
-from selenium.webdriver.common.by import By  # type: ignore
-from selenium.webdriver.remote.webelement import WebElement  # type: ignore
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 
 
 class Element:
@@ -218,10 +218,10 @@ class Selenium:
         self.driver = webdriver.Firefox()
 
     def url(self) -> str:
-        return self.driver.current_url  # type: ignore[no-any-return]
+        return self.driver.current_url
 
     def html(self) -> str:
-        return self.driver.page_source  # type: ignore[no-any-return]
+        return self.driver.page_source
 
     def find(self, xpath: str) -> WebElement:
         elements = self.driver.find_elements(By.XPATH, xpath)

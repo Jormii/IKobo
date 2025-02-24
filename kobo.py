@@ -11,7 +11,7 @@ from web import Element
 
 # NOTE: Configure these
 # --------------------------------------------------------------------------------
-VOLUME = r'E:'
+VOLUME = r'D:'
 # --------------------------------------------------------------------------------
 
 
@@ -159,11 +159,14 @@ class ContentID:
         self.rel_xhtml = rel_xhtml
         self.element_id = element_id
 
-        self.xhtml = f'{self.rel_dir}/{self.rel_xhtml}'
+        if len(self.rel_dir) == 0:
+            self.xhtml = self.rel_xhtml
+        else:
+            self.xhtml = f'{self.rel_dir}/{self.rel_xhtml}'
 
     @staticmethod
     def parse(content_id: str) -> ContentID:
-        CONTENT_ID_REGEX = r'^/mnt/onboard/(.*)!(.*)?!/(.*?)(?:#(.*))?$'
+        CONTENT_ID_REGEX = r'^/mnt/onboard/(.*)!(.*)?!(.*?)(?:#(.*))?$'
 
         search = re.search(CONTENT_ID_REGEX, content_id)
         assert search is not None
@@ -348,6 +351,7 @@ class BookmarkTable:
 
     def __init__(
             self,
+            bookmark_id: str,
             volume_id: str,
             content_id: str,
             start_container_path: str,
@@ -361,6 +365,7 @@ class BookmarkTable:
             date_modified: datetime,
             bookmark_type: BookmarkType
     ) -> None:
+        self.bookmark_id = bookmark_id
         self.volume_id = volume_id
         self.content_id = content_id
         self.start_container_path = start_container_path
@@ -383,13 +388,17 @@ class BookmarkTable:
 
         rows: List[BookmarkTable] = []
         for row in cursor.fetchall():
-            text: str = row[BookmarkTable.TEXT_COL]
+            text: str | None = row[BookmarkTable.TEXT_COL]
+            if text is None:
+                continue
+
             annotation: str | None = row[BookmarkTable.ANNOTATION_COL]
             date_created: str = row[BookmarkTable.DATE_CREATED_COL]
             date_modified: str = row[BookmarkTable.DATE_MODIFIED_COL]
             bookmark_type: str = row[BookmarkTable.TYPE_COL]
 
             rows.append(BookmarkTable(
+                row[BookmarkTable.BOOKMARK_ID_COL],
                 row[BookmarkTable.VOLUME_ID_COL],
                 row[BookmarkTable.CONTENT_ID_COL],
                 row[BookmarkTable.START_CONTAINER_PATH_COL],
@@ -405,6 +414,16 @@ class BookmarkTable:
             ))
 
         return rows
+
+    @staticmethod
+    def delete_all(rows: List[BookmarkTable]) -> None:
+        for row in rows:
+            CONNECTION.execute(
+                f"DELETE FROM {BookmarkTable.TABLE} "
+                f"WHERE {BookmarkTable.BOOKMARK_ID_COL} = '{row.bookmark_id}';"
+            )
+
+        CONNECTION.commit()
 
 
 class WordListTable:
