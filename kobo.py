@@ -460,6 +460,16 @@ class WordListTable:
 
         return rows
 
+    @staticmethod
+    def delete_all(rows: List[WordListTable]) -> None:
+        for row in rows:
+            CONNECTION.execute(
+                f"DELETE FROM {WordListTable.TABLE} "
+                f"WHERE {WordListTable.TEXT_COL} = '{row.text}';"
+            )
+
+        CONNECTION.commit()
+
 
 KOBO_DIR = '.kobo'
 DB_FILE = os.path.join(VOLUME, KOBO_DIR, 'KoboReader.sqlite')

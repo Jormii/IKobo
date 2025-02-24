@@ -20,7 +20,7 @@ DICT_SUFFIX_DECK: Dict[str, Deck] = {
 # --------------------------------------------------------------------------------
 
 
-KOBO_TEXT_FIELD = 'kobo_text'
+KOBO_KEY_FIELD = 'kobo_key'
 
 
 def main() -> int:
@@ -44,6 +44,7 @@ def main() -> int:
             word_rows_by_dict[word_row.dict_suffix] = []
         word_rows_by_dict[word_row.dict_suffix].append(word_row)
 
+    delete: List[WordListTable] = []
     notes: Dict[str, List[Note]] = {}
     for dict_suffix in word_rows_by_dict.keys():
         if dict_suffix not in DICT_SUFFIX_DECK:
@@ -53,21 +54,29 @@ def main() -> int:
         deck = DICT_SUFFIX_DECK[dict_suffix]
 
         notes[deck.name] = []
-        for word_row in word_rows_by_dict[dict_suffix]:
+        rows = word_rows_by_dict[dict_suffix]
+        for i, word_row in enumerate(rows):
+            print(
+                f'{dict_suffix}: {i+1}/{len(rows)}',
+                end='\r' if (i+1) != len(rows) else '\n',
+            )
+
             args = INote.CreateParams(word_row.text, selenium)
-            inote = deck.inote_cls.create(args)  # TODO: Create many
-            if inote is None:
-                continue
+            inotes = deck.inote_cls.create(args)
 
-            fields = inote.format()
-            fields[KOBO_TEXT_FIELD] = args.text
+            if len(inotes) != 0:
+                delete.append(word_row)
 
-            notes[deck.name].append(Note(inote.type, fields))
+            for key, inote in inotes.items():
+                fields = inote.format()
+                fields[KOBO_KEY_FIELD] = key
+
+                notes[deck.name].append(Note(inote.type, fields))
 
     for deck_name in notes.keys():
         for note in notes[deck_name]:
-            text = note.fields[KOBO_TEXT_FIELD]
-            query = f'"{KOBO_TEXT_FIELD}:{text}"'
+            text = note.fields[KOBO_KEY_FIELD]
+            query = f'"{KOBO_KEY_FIELD}:{text}"'
             note_ids = anki.find_notes(deck_name, query)
 
             assert len(note_ids) <= 1
@@ -77,6 +86,9 @@ def main() -> int:
             else:
                 note_id = note_ids[0]
                 anki.update_note(note, note_id)
+
+    selenium.quit()
+    WordListTable.delete_all(delete)
 
     return exit_code
 

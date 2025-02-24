@@ -1,5 +1,8 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from typing import Dict, List, Type
+
+from bs4 import Tag
 
 from web import Element, Selenium
 
@@ -26,149 +29,76 @@ class INote:
         raise NotImplementedError(type(self))
 
     @classmethod
-    def create(cls, args: CreateParams) -> INote | None:
+    def create(cls, args: CreateParams) -> Dict[str, INote]:
         raise NotImplementedError(cls)
 
 
 class RAENote(INote):
 
-    class Entry:
-
-        def __init__(self, definition: str, synonyms: List[str], antonyms: List[str]) -> None:
-            self.definition = definition
-            self.synonyms = synonyms
-            self.antonyms = antonyms
-
-        @staticmethod
-        def create(paragraph: Element) -> RAENote.Entry:
-            children = paragraph.children()
-
-            entry_number = children.pop(0)
-            assert entry_number.tag.name == 'span' and entry_number.cls() == 'n_acep'
-
-            definition = ' '.join((t.text for t in children))
-
-            synonyms: List[str] = []
-            antonyms: List[str] = []
-            siblings = paragraph.next_siblings()
-            if len(siblings) != 0 and siblings[0].name == 'div':
-                div = siblings[0]
-                tds = div.find_all('td')
-                assert len(tds) != 0 and (len(tds) % 2) == 0
-
-                for i in range(0, len(tds), 2):
-                    abbr = tds[i]
-                    ul = tds[i + 1]
-
-                    match abbr.text:
-                        case 'Sin.:':
-                            dst_list = synonyms
-                        case 'Ant.:':
-                            dst_list = antonyms
-                        case _:
-                            raise NotImplementedError(abbr.name)
-
-                    for span in ul.find_all('span', classes={'sin'}):
-                        dst_list.append(span.text)
-
-                    assert len(dst_list) != 0
-
-            entry = RAENote.Entry(definition, synonyms, antonyms)
-            return entry
-
+    @dataclass(slots=True, frozen=True)
     class Article:
-
-        def __init__(
-                self,
-                headword: str,
-                supplementary_info: str,
-                entries: List[RAENote.Entry]
-        ) -> None:
-            self.headword = headword
-            self.supplementary_info = supplementary_info
-            self.entries = entries
-
-        def format(self) -> str:
-            entries_html = '<ol>'
-            for entry in self.entries:
-                syno_and_anto_html = ''
-                if len(entry.synonyms) != 0 or len(entry.antonyms) != 0:
-                    if len(entry.synonyms) != 0:
-                        syno_and_anto_html += f'<li>Sin.: {", ".join(entry.synonyms)}</li>'
-
-                    if len(entry.synonyms) != 0:
-                        syno_and_anto_html += f'<li>Ant.: {", ".join(entry.antonyms)}</li>'
-
-                    syno_and_anto_html = f'<ul>{syno_and_anto_html}</ul>'
-
-                entries_html += f'<li>{entry.definition}{syno_and_anto_html}</li>'
-            entries_html += '</ol>'
-
-            return entries_html
+        word: str
+        element: Element
+        sections: List[Element]
 
         @staticmethod
-        def create(article: Element) -> RAENote.Article:
-            supplementary_info = ''
-            entries: List[RAENote.Entry] = []
+        def create(element: Element) -> RAENote.Article:
+            assert element.name == 'article'
 
-            header = article.find('header')
-            paragraphs = article.find_all('p')
-            for paragraph in paragraphs:
-                p_class = paragraph.cls_or_none()
-                if p_class is None:
-                    assert len(paragraph.text) == 0
-                    continue  # NOTE: There may be empty paragraphs
+            word = element.find('h1')
+            sections = element.find_all('section')
 
-                match p_class[0]:
-                    case 'n':   # Suplementary
-                        supplementary_info = paragraph.text
-                    case 'j':   # Entry
-                        entries.append(RAENote.Entry.create(paragraph))
-                    case 'k':   # Complex form headword
-                        raise NotImplementedError(paragraph)
-                    case 'm':   # Complex form entry
-                        raise NotImplementedError(paragraph)
-                    case 'l':   # Linked complex form
-                        raise NotImplementedError(paragraph)
-                    case _:
-                        raise NotImplementedError(p_class)
+            article = RAENote.Article(word.text, element, sections)
+            return article
 
-            return RAENote.Article(header.text, supplementary_info, entries)
-
-    def __init__(self, url: str, articles: List[Article]) -> None:
+    def __init__(self, url: str, h1: Element, article: Article) -> None:
         super().__init__('RAE')
 
         self.url = url
-        self.articles = articles
+        self.h1 = h1
+        self.article = article
 
     def format(self) -> Dict[str, str]:
-        main_article = self.articles[0]
-        headword_html = f'<a href="{self.url}">{main_article.headword}</a>'
-
-        articles_htmls = (f'<div>{a.format()}</div>' for a in self.articles)
-        articles_html = '<br>'.join(articles_htmls)
-
         return {
-            'lema': headword_html,
-            'informacion_complementaria': main_article.supplementary_info,
-            'acepciones_simples': articles_html,
+            'h1': self._format_rec(self.h1),
+            'html': '\n'.join((self._format_rec(s) for s in self.article.sections)),  # nopep8
         }
 
+    def _format_rec(self, element: Element) -> str:
+        children = element.children()
+        if len(children) == 0:
+            text = element.text
+        else:
+            children_html: List[str] = []
+            for child in element.tag.contents:
+                if isinstance(child, str):
+                    child_html: str = child
+                else:
+                    assert isinstance(child, Tag)
+                    child_html = self._format_rec(Element(child, element.parsed_html))  # nopep8
+
+                children_html.append(child_html)
+
+            text = ''.join(children_html)
+
+        html = f'<{element.name}>{text}</{element.name}>'
+        return html
+
     @classmethod
-    def create(cls, args: INote.CreateParams) -> INote | None:
+    def create(cls, args: INote.CreateParams) -> Dict[str, INote]:
         # NOTE: https://dle.rae.es/contenido/ayuda#IG2
 
         url = f'https://dle.rae.es/{args.text}'
         html = Element.parse_html(args.selenium.get(url))
 
+        h1s = html.find_all('h1')
+        if len(h1s) == 0:
+            return {}
+
+        notes: Dict[str, INote] = {}
         articles = html.find_all('article')
-        if len(articles) == 0:
-            return None
+        for h1, html_article in zip(h1s, articles):
+            article = RAENote.Article.create(html_article)
+            notes[article.word] = RAENote(url, h1, article)
 
-        rae_articles: List[RAENote.Article] = []
-        for article in articles:
-            rae_article = RAENote.Article.create(article)
-            rae_articles.append(rae_article)
-
-        note = RAENote(url, rae_articles)
-        return note
+        return notes
