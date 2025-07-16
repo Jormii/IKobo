@@ -195,7 +195,7 @@ class MarkdownFormatter(IFormatter):
                 markdown += ''
                 markdown += f'>> **{self.annotation_str}**: {bookmark.annotation}\n'
 
-        markdown += '\n'
+        markdown += '\n<br>\n\n'
         return markdown
 
     def timestamp_str(self, timestamp: datetime) -> str:
@@ -220,6 +220,8 @@ class MarkdownFormatter(IFormatter):
         match element.name:
             case 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6':
                 return self._format_header
+            case 'b':
+                return self._format_bold
             case 'i':
                 return self._format_italic
             case 'a':
@@ -252,6 +254,12 @@ class MarkdownFormatter(IFormatter):
 
         return markdown
 
+    def _format_bold(self, element: Element, formatting: Formatting) -> str:
+        children_md = self._format_children(element, formatting)
+        markdown = f'**{children_md}**'
+
+        return markdown
+    
     def _format_italic(self, element: Element, formatting: Formatting) -> str:
         children_md = self._format_children(element, formatting)
         markdown = f'*{children_md}*'

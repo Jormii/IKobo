@@ -451,12 +451,16 @@ class WordListTable:
         for row in cursor.fetchall():
             date_created: str = row[WordListTable.DATE_CREATED_COL]
 
-            rows.append(WordListTable(
-                row[WordListTable.TEXT_COL],
-                row[WordListTable.VOLUME_ID_COL],
-                row[WordListTable.DICT_SUFFIX_COL],
-                datetime.strptime(date_created, DATE_CREATED_FMT).replace(tzinfo=timezone.utc),  # nopep8
-            ))
+            try:
+                rows.append(WordListTable(
+                    row[WordListTable.TEXT_COL],
+                    row[WordListTable.VOLUME_ID_COL],
+                    row[WordListTable.DICT_SUFFIX_COL],
+                    datetime.strptime(date_created, DATE_CREATED_FMT).replace(tzinfo=timezone.utc),  # nopep8
+                ))
+            except Exception as e:
+                print(e)
+                print({c: row[c] for c in row.keys()})
 
         return rows
 
