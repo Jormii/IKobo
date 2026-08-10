@@ -314,7 +314,9 @@ class MarkdownFormatter(IFormatter):
         output_dir = formatting.args.output_dir
         pair = formatting.get_bookmark()
 
-        assert pair is not None
+        if pair is None:
+            return ""
+
         content_id = pair.context.content_id
 
         src = element.get_attr('src')
